@@ -1,49 +1,42 @@
 # Examples
 
-This template ships one minimal example for each Pi package resource type.
+This package ships one Pi extension for Windows clipboard-based dictation.
 
-## Extension
+## Local trial
 
-`extensions/hello.ts` registers:
-
-- `/template-hello`
-- a small session status indicator
-
-Try it with:
+Run Pi with this repo loaded as an extension:
 
 ```bash
 pi -e .
 ```
 
-Then run:
+The bridge is enabled by default. Dictate with Superwhisper and let it update the clipboard.
+
+## Toggle commands
+
+Run these commands inside Pi's input box:
 
 ```txt
-/template-hello YourName
+/sw-paste:off
+/sw-paste:on
 ```
 
-## Agent Skill
+## Environment variables
 
-`skills/example-skill/SKILL.md` demonstrates a minimal Agent Skill.
+| Variable | Default | Purpose |
+|---|---:|---|
+| `PI_SUPERWHISPER_PASTE` | `on` | Set to `off`, `0`, `false`, or `no` to disable by default. |
+| `PI_SUPERWHISPER_PASTE_INTERVAL_MS` | `800` | Clipboard polling interval. |
+| `PI_SUPERWHISPER_PASTE_MAX_CHARS` | `8000` | Maximum clipboard text length to paste. |
 
-Replace it with your real workflow instructions.
+## Expected workflow
 
-## Prompt template
+1. Start Pi with this extension installed or loaded.
+2. Keep the Pi input box focused.
+3. Dictate with Superwhisper.
+4. Superwhisper writes the transcript to the clipboard.
+5. The extension inserts the new clipboard text into the Pi editor.
 
-`prompts/example.md` demonstrates a tiny prompt template with one variable.
+When multiple Pi tabs are open, only the tab that most recently had terminal focus or keyboard input should paste the new clipboard text.
 
-## Theme
-
-`themes/example-theme.json` is a placeholder theme. Replace it or remove `themes/` if your package does not ship themes.
-
-## Typed custom tool
-
-`extensions/index.ts` registers:
-
-- `/template-info`
-- `template_greet` custom tool
-
-The tool demonstrates:
-
-- TypeBox object parameters
-- a string enum schema via `StringEnum`
-- shared logic imported from `lib/greeting.ts`
+The bridge does not wait for Pi's agent turn to become idle. If Pi is thinking, the active tab should still receive the next Superwhisper clipboard update.

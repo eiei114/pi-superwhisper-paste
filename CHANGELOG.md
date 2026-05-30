@@ -8,6 +8,6 @@ This project follows semantic versioning.
 
 ### Added
 
-- Initial Pi package template.
-- Example extension, Agent Skill, prompt, and theme.
-- CI and npm Trusted Publishing workflow.
+- Initial Superwhisper paste bridge extension for Pi on Windows.
+- Default-on clipboard watcher with `/sw-paste:on` and `/sw-paste:off` controls.
+- CI and npm Trusted Publishing workflow from the Pi extension template.

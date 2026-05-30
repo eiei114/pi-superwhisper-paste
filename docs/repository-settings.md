@@ -6,21 +6,20 @@ Use this file after creating a real repository from the template.
 
 Suggested fields:
 
-- Description: one-line pitch for the Pi package
+- Description: Bridge Superwhisper clipboard dictation into the Pi TUI editor on Windows.
 - Website: npm package URL or project docs URL
 - Topics:
   - `pi`
   - `pi-package`
-  - `agent-skill`
+  - `pi-extension`
+  - `superwhisper`
+  - `clipboard`
+  - `windows`
   - `typescript`
 
 ## Template mode
 
-If this repository itself should be reusable as a template:
-
-```txt
-Settings → General → Template repository
-```
+This repository is a concrete package, not a template. Do not enable template mode unless it is intentionally turned into a reusable starter.
 
 ## Branch protection
 

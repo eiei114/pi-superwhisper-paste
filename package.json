@@ -1,24 +1,27 @@
 {
-  "name": "pi-extension-template",
+  "name": "pi-superwhisper-paste",
   "version": "0.1.0",
-  "description": "Template for building Pi packages with extensions, Agent Skills, prompts, and themes.",
+  "description": "Pi extension that bridges Superwhisper clipboard output into the Pi TUI editor on Windows.",
   "type": "module",
   "license": "MIT",
-  "author": "YOUR_NAME",
+  "author": "Keisu",
   "keywords": [
-    "pi-package",
     "pi",
-    "agent-skill",
+    "pi-package",
+    "pi-extension",
+    "superwhisper",
+    "clipboard",
+    "windows",
     "typescript"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/REPO.git"
+    "url": "git+https://github.com/eiei114/pi-superwhisper-paste.git"
   },
   "bugs": {
-    "url": "https://github.com/OWNER/REPO/issues"
+    "url": "https://github.com/eiei114/pi-superwhisper-paste/issues"
   },
-  "homepage": "https://github.com/OWNER/REPO#readme",
+  "homepage": "https://github.com/eiei114/pi-superwhisper-paste#readme",
   "files": [
     "extensions/",
     "lib/",
@@ -39,15 +42,6 @@
   "pi": {
     "extensions": [
       "./extensions"
-    ],
-    "skills": [
-      "./skills"
-    ],
-    "prompts": [
-      "./prompts"
-    ],
-    "themes": [
-      "./themes"
     ]
   },
   "publishConfig": {
@@ -56,14 +50,12 @@
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*",
-    "typebox": "*"
+    "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "latest",
     "@earendil-works/pi-coding-agent": "latest",
     "@earendil-works/pi-tui": "latest",
-    "typebox": "latest",
     "@types/node": "^22.0.0",
     "typescript": "^6.0.3"
   }
