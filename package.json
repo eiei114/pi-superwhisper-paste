@@ -1,6 +1,6 @@
 {
   "name": "pi-superwhisper-paste",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pi extension that bridges Superwhisper clipboard output into the Pi TUI editor on Windows.",
   "type": "module",
   "license": "MIT",
