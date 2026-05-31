@@ -34,23 +34,28 @@ type PiRuntimeContext = {
   ui: PiEditorUi;
 };
 
+type SessionHandle = {
+  generation: number;
+  ctx: PiRuntimeContext;
+};
+
 type BridgeState = {
   mode: BridgeMode;
   interval?: NodeJS.Timeout;
-  inFlight: boolean;
-  activating: boolean;
+  generation: number;
+  session?: SessionHandle;
+  inFlightGeneration?: number;
+  activatingGeneration?: number;
   terminalFocused: boolean;
   unsubscribeTerminalInput?: () => void;
   lastClipboard?: string;
   lastPasted?: string;
   lastPasteSummary?: string;
-  ctx?: PiRuntimeContext;
 };
 
 const state: BridgeState = {
   mode: defaultMode(),
-  inFlight: false,
-  activating: false,
+  generation: 0,
   terminalFocused: true,
 };
 
@@ -77,15 +82,71 @@ function statusText(): string | undefined {
     : `SW paste: ${focusText}`;
 }
 
-function setStatus(ctx: PiRuntimeContext): void {
-  ctx.ui.setStatus(STATUS_KEY, statusText());
+function isCurrentSession(ctx: PiRuntimeContext, generation: number): boolean {
+  return state.session?.generation === generation && state.session.ctx === ctx;
 }
 
-function markPasted(ctx: PiRuntimeContext, text: string): void {
+function safeWithCurrentUi(
+  ctx: PiRuntimeContext,
+  generation: number,
+  action: (ui: PiEditorUi) => void,
+): boolean {
+  if (!isCurrentSession(ctx, generation)) return false;
+
+  try {
+    const ui = ctx.ui;
+    if (!isCurrentSession(ctx, generation)) return false;
+    action(ui);
+    return true;
+  } catch {
+    // A Pi ctx can become stale between any callback/await boundary. Treat UI
+    // failures as a closed session so the extension never bubbles the runner's
+    // stale-ctx guard up as an uncaughtException.
+    return false;
+  }
+}
+
+function setStatus(ctx: PiRuntimeContext, generation: number): boolean {
+  return safeWithCurrentUi(ctx, generation, (ui) => {
+    ui.setStatus(STATUS_KEY, statusText());
+  });
+}
+
+function notify(
+  ctx: PiRuntimeContext,
+  generation: number,
+  message: string,
+  level?: "info" | "warning" | "error" | "success",
+): boolean {
+  return safeWithCurrentUi(ctx, generation, (ui) => {
+    ui.notify(message, level);
+  });
+}
+
+function pasteToEditor(ctx: PiRuntimeContext, generation: number, text: string): boolean {
+  return safeWithCurrentUi(ctx, generation, (ui) => {
+    ui.pasteToEditor(text);
+  });
+}
+
+function getEditorText(ctx: PiRuntimeContext, generation: number): string | undefined {
+  if (!isCurrentSession(ctx, generation)) return undefined;
+
+  try {
+    const ui = ctx.ui;
+    if (!isCurrentSession(ctx, generation)) return undefined;
+    return String(ui.getEditorText?.() ?? "");
+  } catch {
+    return undefined;
+  }
+}
+
+function markPasted(ctx: PiRuntimeContext, generation: number, text: string): void {
+  if (!isCurrentSession(ctx, generation)) return;
   state.lastPasted = text;
   state.lastPasteSummary = `${text.length} chars`;
   // pasteToEditor mutates the editor directly; setStatus nudges Pi to redraw.
-  setStatus(ctx);
+  setStatus(ctx, generation);
 }
 
 async function readClipboardText(): Promise<string | undefined> {
@@ -140,128 +201,196 @@ async function isActiveTab(): Promise<boolean> {
   }
 }
 
-async function refreshClipboardBaseline(): Promise<void> {
+async function refreshClipboardBaseline(
+  ctx: PiRuntimeContext,
+  generation: number,
+): Promise<void> {
   const text = await readClipboardText();
+  if (!isCurrentSession(ctx, generation)) return;
   if (text !== undefined) state.lastClipboard = text;
 }
 
-async function activateTab(ctx: PiRuntimeContext): Promise<void> {
-  if (state.activating) return;
+async function activateTab(ctx: PiRuntimeContext, generation: number): Promise<void> {
+  if (!isCurrentSession(ctx, generation) || state.activatingGeneration !== undefined) return;
 
-  state.activating = true;
+  state.activatingGeneration = generation;
   try {
+    if (!isCurrentSession(ctx, generation)) return;
     state.terminalFocused = true;
-    await refreshClipboardBaseline();
+    await refreshClipboardBaseline(ctx, generation);
+    if (!isCurrentSession(ctx, generation)) return;
     await claimActiveTab();
-    setStatus(ctx);
+    if (!isCurrentSession(ctx, generation)) return;
+    setStatus(ctx, generation);
   } finally {
-    state.activating = false;
+    if (state.activatingGeneration === generation) state.activatingGeneration = undefined;
   }
 }
 
-async function markActiveFromInput(ctx: PiRuntimeContext): Promise<void> {
+async function markActiveFromInput(ctx: PiRuntimeContext, generation: number): Promise<void> {
+  if (!isCurrentSession(ctx, generation)) return;
   state.terminalFocused = true;
   await claimActiveTab();
-  setStatus(ctx);
+  if (!isCurrentSession(ctx, generation)) return;
+  setStatus(ctx, generation);
 }
 
-function shouldPaste(text: string, ctx: PiRuntimeContext): boolean {
+function shouldPaste(text: string, ctx: PiRuntimeContext, generation: number): boolean {
   if (!text.trim()) return false;
   if (text.length > maxChars()) return false;
   if (text === state.lastPasted) return false;
 
-  const current = String(ctx.ui.getEditorText?.() ?? "");
+  const current = getEditorText(ctx, generation);
+  if (current === undefined) return false;
   if (current.endsWith(text)) return false;
 
   return true;
 }
 
-async function pasteClipboardChange(ctx: PiRuntimeContext): Promise<void> {
-  if (state.inFlight || state.activating || state.mode === "off") return;
+async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): Promise<void> {
+  if (!isCurrentSession(ctx, generation)) return;
+  if (
+    state.inFlightGeneration !== undefined ||
+    state.activatingGeneration === generation ||
+    state.mode === "off"
+  ) {
+    return;
+  }
   if (!ctx.hasUI) return;
   if (!(await isActiveTab())) return;
+  if (!isCurrentSession(ctx, generation)) return;
 
-  state.inFlight = true;
+  state.inFlightGeneration = generation;
   try {
     const text = await readClipboardText();
+    if (!isCurrentSession(ctx, generation)) return;
     if (text === undefined || text === state.lastClipboard) return;
 
     state.lastClipboard = text;
-    if (!shouldPaste(text, ctx)) return;
+    if (!shouldPaste(text, ctx, generation)) return;
     if (!(await isActiveTab())) return;
+    if (!isCurrentSession(ctx, generation)) return;
 
-    ctx.ui.pasteToEditor(text);
-    markPasted(ctx, text);
+    if (!pasteToEditor(ctx, generation, text)) return;
+    markPasted(ctx, generation, text);
   } catch {
     // Clipboard polling should stay quiet while the user is typing.
   } finally {
-    state.inFlight = false;
+    if (state.inFlightGeneration === generation) state.inFlightGeneration = undefined;
   }
 }
 
-function setupTerminalFocusTracking(ctx: PiRuntimeContext): void {
+function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): void {
+  if (!isCurrentSession(ctx, generation)) return;
   if (state.unsubscribeTerminalInput) return;
 
-  process.stdout.write(ENABLE_FOCUS_REPORTING);
-  void activateTab(ctx);
+  try {
+    process.stdout.write(ENABLE_FOCUS_REPORTING);
+  } catch {
+    // Best-effort terminal focus setup only.
+  }
+  void activateTab(ctx, generation);
 
-  state.unsubscribeTerminalInput = ctx.ui.onTerminalInput((data) => {
-    if (data === FOCUS_IN) {
-      void activateTab(ctx);
-      return { consume: true };
-    }
+  safeWithCurrentUi(ctx, generation, (ui) => {
+    state.unsubscribeTerminalInput = ui.onTerminalInput((data) => {
+      if (!isCurrentSession(ctx, generation)) return undefined;
 
-    if (data === FOCUS_OUT) {
-      state.terminalFocused = false;
-      setStatus(ctx);
-      return { consume: true };
-    }
+      if (data === FOCUS_IN) {
+        void activateTab(ctx, generation);
+        return { consume: true };
+      }
 
-    if (data.length > 0) {
-      void markActiveFromInput(ctx);
-    }
+      if (data === FOCUS_OUT) {
+        state.terminalFocused = false;
+        setStatus(ctx, generation);
+        return { consume: true };
+      }
 
-    return undefined;
+      if (data.length > 0) {
+        void markActiveFromInput(ctx, generation);
+      }
+
+      return undefined;
+    });
   });
 }
 
 function teardownTerminalFocusTracking(): void {
-  state.unsubscribeTerminalInput?.();
+  try {
+    state.unsubscribeTerminalInput?.();
+  } catch {
+    // The old subscription may already belong to an invalidated session.
+  }
   state.unsubscribeTerminalInput = undefined;
-  process.stdout.write(DISABLE_FOCUS_REPORTING);
+
+  try {
+    process.stdout.write(DISABLE_FOCUS_REPORTING);
+  } catch {
+    // Best-effort terminal focus cleanup only.
+  }
 }
 
-function ensurePolling(ctx: PiRuntimeContext): void {
-  state.ctx = ctx;
-  setupTerminalFocusTracking(ctx);
-  setStatus(ctx);
-
-  if (state.interval) return;
-  state.interval = setInterval(() => {
-    if (state.ctx) void pasteClipboardChange(state.ctx);
-  }, intervalMs());
-}
-
-function stopPolling(ctx?: PiRuntimeContext): void {
+function teardownSessionResources(): void {
   if (state.interval) {
     clearInterval(state.interval);
     state.interval = undefined;
   }
   teardownTerminalFocusTracking();
+  state.inFlightGeneration = undefined;
+  state.activatingGeneration = undefined;
+}
+
+function beginSession(ctx: PiRuntimeContext): number {
+  teardownSessionResources();
+  const generation = state.generation + 1;
+  state.generation = generation;
+  state.session = { generation, ctx };
+  return generation;
+}
+
+function ensureCurrentSession(ctx: PiRuntimeContext): number {
+  if (state.session?.ctx === ctx) return state.session.generation;
+  return beginSession(ctx);
+}
+
+function endSession(): void {
+  teardownSessionResources();
+  state.generation += 1;
+  state.session = undefined;
+}
+
+function ensurePolling(ctx: PiRuntimeContext, generation: number): void {
+  if (!isCurrentSession(ctx, generation)) return;
+
+  setupTerminalFocusTracking(ctx, generation);
+  setStatus(ctx, generation);
+
+  if (state.interval) return;
+  state.interval = setInterval(() => {
+    if (isCurrentSession(ctx, generation)) void pasteClipboardChange(ctx, generation);
+  }, intervalMs());
+}
+
+function stopPolling(ctx: PiRuntimeContext, generation: number): void {
+  teardownSessionResources();
   state.mode = "off";
-  if (ctx) setStatus(ctx);
+  setStatus(ctx, generation);
 }
 
-async function startPolling(ctx: PiRuntimeContext): Promise<void> {
-  state.lastClipboard = await readClipboardText();
-  ensurePolling(ctx);
+async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<void> {
+  const text = await readClipboardText();
+  if (!isCurrentSession(ctx, generation)) return;
+  state.lastClipboard = text;
+  ensurePolling(ctx, generation);
 }
 
-async function arm(ctx: PiRuntimeContext): Promise<void> {
-  state.lastClipboard = await readClipboardText();
+async function arm(ctx: PiRuntimeContext, generation: number): Promise<void> {
+  const text = await readClipboardText();
+  if (!isCurrentSession(ctx, generation)) return;
+  state.lastClipboard = text;
   state.mode = "on";
-  ensurePolling(ctx);
-  ctx.ui.notify("Superwhisper paste bridge: enabled", "info");
+  ensurePolling(ctx, generation);
+  notify(ctx, generation, "Superwhisper paste bridge: enabled", "info");
 }
 
 function parseControlCommand(text: string): BridgeMode | undefined {
@@ -270,32 +399,38 @@ function parseControlCommand(text: string): BridgeMode | undefined {
   return match[1].toLowerCase() as BridgeMode;
 }
 
-async function runControlAction(action: BridgeMode, ctx: PiRuntimeContext): Promise<void> {
+async function runControlAction(
+  action: BridgeMode,
+  ctx: PiRuntimeContext,
+  generation: number,
+): Promise<void> {
   if (action === "on") {
-    await arm(ctx);
+    await arm(ctx, generation);
     return;
   }
 
-  stopPolling(ctx);
-  ctx.ui.notify("Superwhisper paste bridge: disabled", "info");
+  stopPolling(ctx, generation);
+  notify(ctx, generation, "Superwhisper paste bridge: disabled", "info");
 }
 
 export default function superwhisperPaste(pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     const runtimeCtx = ctx as PiRuntimeContext;
-    state.ctx = runtimeCtx;
-    if (state.mode !== "off") await startPolling(runtimeCtx);
+    const generation = beginSession(runtimeCtx);
+    if (state.mode !== "off") await startPolling(runtimeCtx, generation);
   });
 
   pi.on("session_shutdown", () => {
-    stopPolling();
+    endSession();
   });
 
   pi.on("input", async (event, ctx) => {
     const action = parseControlCommand(event.text);
     if (!action) return { action: "continue" };
 
-    await runControlAction(action, ctx as PiRuntimeContext);
+    const runtimeCtx = ctx as PiRuntimeContext;
+    const generation = ensureCurrentSession(runtimeCtx);
+    await runControlAction(action, runtimeCtx, generation);
     return { action: "handled" };
   });
 }

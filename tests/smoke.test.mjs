@@ -38,3 +38,13 @@ test("extension gates clipboard paste to the active terminal tab", () => {
 test("extension keeps pasting while the agent is busy", () => {
   assert.doesNotMatch(extensionSource, /isIdle/);
 });
+
+test("extension guards stale session callbacks before touching Pi UI", () => {
+  assert.match(extensionSource, /type SessionHandle/);
+  assert.match(extensionSource, /function isCurrentSession/);
+  assert.match(extensionSource, /function safeWithCurrentUi/);
+  assert.match(extensionSource, /function beginSession[\s\S]*teardownSessionResources/);
+  assert.match(extensionSource, /onTerminalInput\(\(data\) => \{\s*if \(!isCurrentSession\(ctx, generation\)\) return undefined;/);
+  assert.match(extensionSource, /setInterval\(\(\) => \{\s*if \(isCurrentSession\(ctx, generation\)\) void pasteClipboardChange\(ctx, generation\);/);
+  assert.doesNotMatch(extensionSource, /state\.ctx/);
+});
