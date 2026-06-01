@@ -39,6 +39,11 @@ test("extension keeps pasting while the agent is busy", () => {
   assert.doesNotMatch(extensionSource, /isIdle/);
 });
 
+test("extension registers control commands for slash autocomplete", () => {
+  assert.match(extensionSource, /registerCommand\("sw-paste:on"/);
+  assert.match(extensionSource, /registerCommand\("sw-paste:off"/);
+});
+
 test("extension guards stale session callbacks before touching Pi UI", () => {
   assert.match(extensionSource, /type SessionHandle/);
   assert.match(extensionSource, /function isCurrentSession/);

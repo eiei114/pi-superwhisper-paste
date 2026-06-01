@@ -36,7 +36,7 @@ This may not be a universal Superwhisper or Pi issue. If Superwhisper already pa
 - Pastes only into the active Pi tab when multiple tabs are open.
 - Ignores old clipboard content when switching tabs.
 - Continues inserting while Pi is thinking or waiting on an agent turn.
-- Provides two control commands: `/sw-paste:on` and `/sw-paste:off`.
+- Provides slash-autocomplete control commands: `/sw-paste:on` and `/sw-paste:off`.
 
 ## Install
 

@@ -32,8 +32,12 @@ async function importExtensionFromTypeScript() {
 
 function createPiHarness() {
   const handlers = new Map();
+  const commands = new Map();
   return {
     pi: {
+      registerCommand(commandName, options) {
+        commands.set(commandName, options);
+      },
       on(eventName, handler) {
         handlers.set(eventName, handler);
       },
@@ -42,6 +46,11 @@ function createPiHarness() {
       const handler = handlers.get(eventName);
       assert.equal(typeof handler, "function", `missing handler for ${eventName}`);
       return handler;
+    },
+    command(commandName) {
+      const command = commands.get(commandName);
+      assert.equal(typeof command?.handler, "function", `missing command for ${commandName}`);
+      return command;
     },
   };
 }
@@ -129,6 +138,8 @@ test("regression: stale session callbacks do not bubble Pi's stale-ctx guard", a
 
     const harness = createPiHarness();
     superwhisperPaste(harness.pi);
+    harness.command("sw-paste:on");
+    harness.command("sw-paste:off");
 
     const runtime = createRuntimeContext();
     await harness.handler("session_start")({}, runtime.ctx);
