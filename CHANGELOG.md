@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.2] - 2026-06-01
+
+### Fixed
+
+- Register `/sw-paste:on` and `/sw-paste:off` as Pi slash commands so they appear in command autocomplete.
+
+### Changed
+
+- Clarify that the Superwhisper paste controls are slash-autocomplete commands.
+
 ## [0.1.1] - 2026-05-31
 
 ### Added

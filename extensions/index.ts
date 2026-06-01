@@ -414,6 +414,24 @@ async function runControlAction(
 }
 
 export default function superwhisperPaste(pi: ExtensionAPI) {
+  pi.registerCommand("sw-paste:on", {
+    description: "Enable the Superwhisper clipboard paste bridge",
+    handler: async (_args, ctx) => {
+      const runtimeCtx = ctx as PiRuntimeContext;
+      const generation = ensureCurrentSession(runtimeCtx);
+      await runControlAction("on", runtimeCtx, generation);
+    },
+  });
+
+  pi.registerCommand("sw-paste:off", {
+    description: "Disable the Superwhisper clipboard paste bridge",
+    handler: async (_args, ctx) => {
+      const runtimeCtx = ctx as PiRuntimeContext;
+      const generation = ensureCurrentSession(runtimeCtx);
+      await runControlAction("off", runtimeCtx, generation);
+    },
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     const runtimeCtx = ctx as PiRuntimeContext;
     const generation = beginSession(runtimeCtx);
