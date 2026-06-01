@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
+import { promisify } from "node:util";
 import ts from "typescript";
 
 const extensionUrl = new URL("../extensions/index.ts", import.meta.url);
@@ -108,10 +109,13 @@ test("regression: stale session callbacks do not bubble Pi's stale-ctx guard", a
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
   const tempModules = [];
 
-  childProcess.execFile = (_file, _args, _options, callback) => {
-    queueMicrotask(() => callback(null, { stdout: "clipboard baseline", stderr: "" }));
+  const execFileMock = (_file, _args, _options, callback) => {
+    queueMicrotask(() => callback(null, "clipboard baseline", ""));
     return { kill() {} };
   };
+  execFileMock[promisify.custom] = async () => ({ stdout: "clipboard baseline", stderr: "" });
+
+  childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
 
   process.stdout.write = () => true;
