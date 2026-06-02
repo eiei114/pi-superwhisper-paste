@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.3] - 2026-06-03
+
+### Changed
+
+- Mark the package as archived in README and `package.json` description.
+- Point new installs to the official Superwhisper Pi extension: `pi install npm:@superwhisper/pi`.
+
 ## [0.1.2] - 2026-06-01
 
 ### Fixed
