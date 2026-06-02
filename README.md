@@ -8,6 +8,8 @@
 > pi install npm:@superwhisper/pi
 > ```
 >
+> Docs: https://superwhisper.com/pi
+>
 > This repository (`pi-superwhisper-paste`) was a community bridge for the same problem (Superwhisper clipboard output not reaching the Pi TUI on Windows). It is **no longer maintained**. Issues and feature requests belong with Superwhisper's official Pi integration.
 
 [![CI](https://github.com/eiei114/pi-superwhisper-paste/actions/workflows/ci.yml/badge.svg)](https://github.com/eiei114/pi-superwhisper-paste/actions/workflows/ci.yml)
@@ -51,7 +53,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Links
 
-- Official: `@superwhisper/pi` on npm (install via `pi install npm:@superwhisper/pi`)
+- Official: https://superwhisper.com/pi — `@superwhisper/pi` on npm (`pi install npm:@superwhisper/pi`)
 - Archived npm: https://www.npmjs.com/package/pi-superwhisper-paste
 - Archived GitHub: https://github.com/eiei114/pi-superwhisper-paste
 
