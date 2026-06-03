@@ -1,49 +1,51 @@
 # Pi Superwhisper Paste
 
-> **Archived — use the official Superwhisper Pi extension instead**
+> Windows-focused Pi bridge for Superwhisper clipboard input.
 >
-> Superwhisper now ships an official Pi package. Install and maintain that going forward:
->
-> ```bash
-> pi install npm:@superwhisper/pi
-> ```
->
-> Docs: https://superwhisper.com/pi
->
-> This repository (`pi-superwhisper-paste`) was a community bridge for the same problem (Superwhisper clipboard output not reaching the Pi TUI on Windows). It is **no longer maintained**. Issues and feature requests belong with Superwhisper's official Pi integration.
+> The official Superwhisper Pi package (`@superwhisper/pi`) targets the deeplink/macOS flow. If you need the clipboard-based Windows workaround, use this package.
 
 [![CI](https://github.com/eiei114/pi-superwhisper-paste/actions/workflows/ci.yml/badge.svg)](https://github.com/eiei114/pi-superwhisper-paste/actions/workflows/ci.yml)
 [![Publish](https://github.com/eiei114/pi-superwhisper-paste/actions/workflows/publish.yml/badge.svg)](https://github.com/eiei114/pi-superwhisper-paste/actions/workflows/publish.yml)
 [![npm version](https://img.shields.io/npm/v/pi-superwhisper-paste.svg)](https://www.npmjs.com/package/pi-superwhisper-paste)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Recommended install
-
-```bash
-pi install npm:@superwhisper/pi
-```
-
-## Historical context
-
-Superwhisper can paste dictated text into normal Windows apps, but terminal TUIs can be a rough edge. In the original case, dictation worked in Notepad and PowerShell, and Typeless worked in Pi, but Superwhisper's automatic paste did not reliably reach Pi's TUI editor without a manual `Ctrl+V`.
-
-This package bridged that gap from the Pi side: it watched the Windows clipboard, detected new Superwhisper output, and inserted it into the active Pi editor with Pi's extension API.
-
-## Legacy install (not recommended)
-
-If you still need this archived package for comparison or rollback:
+## Recommended install on Windows
 
 ```bash
 pi install npm:pi-superwhisper-paste
 ```
 
-Or from GitHub:
+## Official package
+
+If you are using the official Superwhisper Pi integration instead:
+
+```bash
+pi install npm:@superwhisper/pi
+```
+
+Docs: https://superwhisper.com/pi
+
+## Why this package exists
+
+Superwhisper can paste dictated text into normal Windows apps, but terminal TUIs can be a rough edge. In the original case, dictation worked in Notepad and PowerShell, and Typeless worked in Pi, but Superwhisper's automatic paste did not reliably reach Pi's TUI editor without a manual `Ctrl+V`.
+
+This package bridges that gap from the Pi side: it watches the Windows clipboard, detects new Superwhisper output, and inserts it into the active Pi editor with Pi's extension API.
+
+## Install
+
+From npm:
+
+```bash
+pi install npm:pi-superwhisper-paste
+```
+
+From GitHub:
 
 ```bash
 pi install git:github.com/eiei114/pi-superwhisper-paste
 ```
 
-## Legacy behavior (v0.1.2 and earlier)
+## Current behavior
 
 - Default-on after the extension loads.
 - Slash commands: `/sw-paste:on` and `/sw-paste:off`.
@@ -53,9 +55,9 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Links
 
-- Official: https://superwhisper.com/pi — `@superwhisper/pi` on npm (`pi install npm:@superwhisper/pi`)
-- Archived npm: https://www.npmjs.com/package/pi-superwhisper-paste
-- Archived GitHub: https://github.com/eiei114/pi-superwhisper-paste
+- Windows package: https://www.npmjs.com/package/pi-superwhisper-paste
+- GitHub: https://github.com/eiei114/pi-superwhisper-paste
+- Official Superwhisper Pi package: https://superwhisper.com/pi — `@superwhisper/pi` on npm (`pi install npm:@superwhisper/pi`)
 
 ## License
 
