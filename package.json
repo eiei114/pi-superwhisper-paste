@@ -1,7 +1,7 @@
 {
   "name": "pi-superwhisper-paste",
-  "version": "0.1.3",
-  "description": "[Archived] Community Pi bridge for Superwhisper on Windows. Use npm:@superwhisper/pi instead.",
+  "version": "0.1.4",
+  "description": "Superwhisper clipboard bridge for Pi on Windows.",
   "type": "module",
   "license": "MIT",
   "author": "Keisu",
