@@ -59,21 +59,25 @@ const state: BridgeState = {
   terminalFocused: true,
 };
 
+/** Resolves bridge on/off from `PI_SUPERWHISPER_PASTE` (default on). */
 function defaultMode(): BridgeMode {
   const raw = (process.env.PI_SUPERWHISPER_PASTE ?? "on").trim().toLowerCase();
   return ["0", "false", "no", "off"].includes(raw) ? "off" : "on";
 }
 
+/** Poll interval from env or default. */
 function intervalMs(): number {
   const parsed = Number(process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INTERVAL_MS;
 }
 
+/** Max pasted characters from env or default. */
 function maxChars(): number {
   const parsed = Number(process.env.PI_SUPERWHISPER_PASTE_MAX_CHARS);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CHARS;
 }
 
+/** Status bar label for the paste bridge. */
 function statusText(): string | undefined {
   if (state.mode === "off") return undefined;
   const focusText = state.terminalFocused ? "active" : "standby";
@@ -82,10 +86,12 @@ function statusText(): string | undefined {
     : `SW paste: ${focusText}`;
 }
 
+/** True when `ctx`/`generation` still match the active Pi session. */
 function isCurrentSession(ctx: PiRuntimeContext, generation: number): boolean {
   return state.session?.generation === generation && state.session.ctx === ctx;
 }
 
+/** Runs a UI callback only for the current session; swallows stale-ctx errors. */
 function safeWithCurrentUi(
   ctx: PiRuntimeContext,
   generation: number,
@@ -106,12 +112,14 @@ function safeWithCurrentUi(
   }
 }
 
+/** Updates Pi status bar when session is current. */
 function setStatus(ctx: PiRuntimeContext, generation: number): boolean {
   return safeWithCurrentUi(ctx, generation, (ui) => {
     ui.setStatus(STATUS_KEY, statusText());
   });
 }
 
+/** Shows a Pi notification when session is current. */
 function notify(
   ctx: PiRuntimeContext,
   generation: number,
@@ -123,12 +131,14 @@ function notify(
   });
 }
 
+/** Pastes text into the editor when session is current. */
 function pasteToEditor(ctx: PiRuntimeContext, generation: number, text: string): boolean {
   return safeWithCurrentUi(ctx, generation, (ui) => {
     ui.pasteToEditor(text);
   });
 }
 
+/** Reads editor text when session is current. */
 function getEditorText(ctx: PiRuntimeContext, generation: number): string | undefined {
   if (!isCurrentSession(ctx, generation)) return undefined;
 
@@ -141,6 +151,7 @@ function getEditorText(ctx: PiRuntimeContext, generation: number): string | unde
   }
 }
 
+/** Records last paste and refreshes status after insert. */
 function markPasted(ctx: PiRuntimeContext, generation: number, text: string): void {
   if (!isCurrentSession(ctx, generation)) return;
   state.lastPasted = text;
@@ -149,6 +160,7 @@ function markPasted(ctx: PiRuntimeContext, generation: number, text: string): vo
   setStatus(ctx, generation);
 }
 
+/** Builds a PowerShell command that reads clipboard text truncated to `limit` characters. */
 function clipboardPowerShellScript(limit: number): string {
   return [
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
@@ -161,6 +173,7 @@ function clipboardPowerShellScript(limit: number): string {
   ].join("; ");
 }
 
+/** Reads clipboard text via PowerShell; returns undefined on failure or oversize output. */
 async function readClipboardText(): Promise<string | undefined> {
   const limit = maxChars();
 
@@ -185,10 +198,12 @@ async function readClipboardText(): Promise<string | undefined> {
   }
 }
 
+/** Temp file path for cross-tab active-instance claim. */
 function activeStatePath(): string {
   return join(tmpdir(), ACTIVE_STATE_FILE);
 }
 
+/** Writes this Pi instance as the active tab for paste gating. */
 async function claimActiveTab(): Promise<void> {
   const claim = {
     instanceId: INSTANCE_ID,
@@ -203,6 +218,7 @@ async function claimActiveTab(): Promise<void> {
   }
 }
 
+/** True when this instance owns the active-tab claim and has focus. */
 async function isActiveTab(): Promise<boolean> {
   if (!state.terminalFocused) return false;
 
@@ -216,6 +232,7 @@ async function isActiveTab(): Promise<boolean> {
   }
 }
 
+/** Seeds `lastClipboard` without pasting (focus/tab activation). */
 async function refreshClipboardBaseline(
   ctx: PiRuntimeContext,
   generation: number,
@@ -225,6 +242,7 @@ async function refreshClipboardBaseline(
   if (text !== undefined) state.lastClipboard = text;
 }
 
+/** Marks tab focused, refreshes clipboard baseline, claims active tab. */
 async function activateTab(ctx: PiRuntimeContext, generation: number): Promise<void> {
   if (!isCurrentSession(ctx, generation) || state.activatingGeneration !== undefined) return;
 
@@ -242,6 +260,7 @@ async function activateTab(ctx: PiRuntimeContext, generation: number): Promise<v
   }
 }
 
+/** Claims active tab when user types in the terminal. */
 async function markActiveFromInput(ctx: PiRuntimeContext, generation: number): Promise<void> {
   if (!isCurrentSession(ctx, generation)) return;
   state.terminalFocused = true;
@@ -250,6 +269,7 @@ async function markActiveFromInput(ctx: PiRuntimeContext, generation: number): P
   setStatus(ctx, generation);
 }
 
+/** Whether clipboard text should be auto-pasted into the editor. */
 function shouldPaste(text: string, ctx: PiRuntimeContext, generation: number): boolean {
   if (!text.trim()) return false;
   if (text.length > maxChars()) return false;
@@ -262,6 +282,7 @@ function shouldPaste(text: string, ctx: PiRuntimeContext, generation: number): b
   return true;
 }
 
+/** Poll handler: paste new clipboard text when gates pass. */
 async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): Promise<void> {
   if (!isCurrentSession(ctx, generation)) return;
   if (
@@ -295,6 +316,7 @@ async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): 
   }
 }
 
+/** Enables terminal focus reporting and input hooks for this session. */
 function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): void {
   if (!isCurrentSession(ctx, generation)) return;
   if (state.unsubscribeTerminalInput) return;
@@ -330,6 +352,7 @@ function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): 
   });
 }
 
+/** Disables focus reporting and removes terminal input subscription. */
 function teardownTerminalFocusTracking(): void {
   try {
     state.unsubscribeTerminalInput?.();
@@ -345,6 +368,7 @@ function teardownTerminalFocusTracking(): void {
   }
 }
 
+/** Clears poll interval and terminal hooks for the current session. */
 function teardownSessionResources(): void {
   if (state.interval) {
     clearInterval(state.interval);
@@ -355,6 +379,7 @@ function teardownSessionResources(): void {
   state.activatingGeneration = undefined;
 }
 
+/** Starts a new session generation and tears down the previous one. */
 function beginSession(ctx: PiRuntimeContext): number {
   teardownSessionResources();
   const generation = state.generation + 1;
@@ -363,17 +388,20 @@ function beginSession(ctx: PiRuntimeContext): number {
   return generation;
 }
 
+/** Returns current session generation, beginning one if needed. */
 function ensureCurrentSession(ctx: PiRuntimeContext): number {
   if (state.session?.ctx === ctx) return state.session.generation;
   return beginSession(ctx);
 }
 
+/** Invalidates the current session and releases resources. */
 function endSession(): void {
   teardownSessionResources();
   state.generation += 1;
   state.session = undefined;
 }
 
+/** Starts clipboard polling and focus tracking when mode is on. */
 function ensurePolling(ctx: PiRuntimeContext, generation: number): void {
   if (!isCurrentSession(ctx, generation)) return;
 
@@ -386,12 +414,14 @@ function ensurePolling(ctx: PiRuntimeContext, generation: number): void {
   }, intervalMs());
 }
 
+/** Stops polling and clears bridge status. */
 function stopPolling(ctx: PiRuntimeContext, generation: number): void {
   teardownSessionResources();
   state.mode = "off";
   setStatus(ctx, generation);
 }
 
+/** Baselines clipboard then starts polling (session_start path). */
 async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<void> {
   const text = await readClipboardText();
   if (!isCurrentSession(ctx, generation)) return;
@@ -399,6 +429,7 @@ async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<
   ensurePolling(ctx, generation);
 }
 
+/** Enables bridge mode and notifies the user. */
 async function arm(ctx: PiRuntimeContext, generation: number): Promise<void> {
   const text = await readClipboardText();
   if (!isCurrentSession(ctx, generation)) return;
@@ -408,12 +439,14 @@ async function arm(ctx: PiRuntimeContext, generation: number): Promise<void> {
   notify(ctx, generation, "Superwhisper paste bridge: enabled", "info");
 }
 
+/** Parses `/sw-paste:on` or `/sw-paste:off` from user input. */
 function parseControlCommand(text: string): BridgeMode | undefined {
   const match = text.trim().match(/^\/sw-paste:(on|off)$/i);
   if (!match) return undefined;
   return match[1].toLowerCase() as BridgeMode;
 }
 
+/** Applies on/off control command for the current session. */
 async function runControlAction(
   action: BridgeMode,
   ctx: PiRuntimeContext,
@@ -428,6 +461,7 @@ async function runControlAction(
   notify(ctx, generation, "Superwhisper paste bridge: disabled", "info");
 }
 
+/** Pi extension entry: Superwhisper clipboard bridge for Windows. */
 export default function superwhisperPaste(pi: ExtensionAPI) {
   pi.registerCommand("sw-paste:on", {
     description: "Enable the Superwhisper clipboard paste bridge",
