@@ -149,25 +149,40 @@ function markPasted(ctx: PiRuntimeContext, generation: number, text: string): vo
   setStatus(ctx, generation);
 }
 
-async function readClipboardText(): Promise<string | undefined> {
-  const script = [
+function clipboardPowerShellScript(limit: number): string {
+  return [
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    `$limit = ${limit}`,
     "$text = Get-Clipboard -Raw -Format Text -ErrorAction SilentlyContinue",
-    "if ($null -ne $text) { [Console]::Out.Write($text) }",
+    "if ($null -ne $text) {",
+    "  if ($text.Length -gt $limit) { $text = $text.Substring(0, $limit) }",
+    "  [Console]::Out.Write($text)",
+    "}",
   ].join("; ");
+}
 
-  const result = await execFileAsync(
-    "powershell.exe",
-    ["-NoProfile", "-Command", script],
-    {
-      encoding: "utf8",
-      maxBuffer: maxChars() * 4,
-      timeout: 2500,
-      windowsHide: true,
-    },
-  );
+async function readClipboardText(): Promise<string | undefined> {
+  const limit = maxChars();
 
-  return typeof result.stdout === "string" ? result.stdout : undefined;
+  try {
+    const result = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-Command", clipboardPowerShellScript(limit)],
+      {
+        encoding: "utf8",
+        maxBuffer: limit * 4 + 1024,
+        timeout: 2500,
+        windowsHide: true,
+      },
+    );
+
+    const stdout = typeof result.stdout === "string" ? result.stdout : undefined;
+    if (stdout === undefined) return undefined;
+    return stdout.length > limit ? stdout.slice(0, limit) : stdout;
+  } catch {
+    // Oversized clipboard, PowerShell failure, or maxBuffer must not break extension load.
+    return undefined;
+  }
 }
 
 function activeStatePath(): string {

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.5] - 2026-06-03
+
+### Fixed
+
+- Truncate clipboard text in PowerShell before writing stdout so huge clipboards no longer exceed Node `maxBuffer` on extension load.
+- Treat clipboard read failures (including `maxBuffer`) as empty reads so `session_start` never surfaces as an extension error.
+
 ## [0.1.4] - 2026-06-03
 
 ### Changed
