@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.4] - 2026-06-03
+
+### Changed
+
+- Clarify that `pi-superwhisper-paste` is the Windows clipboard-based package.
+- Point users to `@superwhisper/pi` only for the official deeplink/macOS flow.
+- Update npm package metadata to match the revived Windows-focused positioning.
+
 ## [0.1.3] - 2026-06-03
 
 ### Changed
