@@ -44,6 +44,12 @@ test("extension registers control commands for slash autocomplete", () => {
   assert.match(extensionSource, /registerCommand\("sw-paste:off"/);
 });
 
+test("extension truncates clipboard reads before PowerShell stdout", () => {
+  assert.match(extensionSource, /\$limit = \$\{limit\}/);
+  assert.match(extensionSource, /Substring\(0, \$limit\)/);
+  assert.match(extensionSource, /async function readClipboardText[\s\S]*catch \{/);
+});
+
 test("extension guards stale session callbacks before touching Pi UI", () => {
   assert.match(extensionSource, /type SessionHandle/);
   assert.match(extensionSource, /function isCurrentSession/);
