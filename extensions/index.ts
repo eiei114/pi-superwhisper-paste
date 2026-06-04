@@ -6,18 +6,52 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const EXTENSION_VERSION = "0.1.14";
 
 const STATUS_KEY = "superwhisper-paste";
 const DEFAULT_INTERVAL_MS = 800;
 const DEFAULT_MAX_CHARS = 8000;
+const DEFAULT_IGNORE_COPY_MS = 1500;
+const BASELINE_REFRESH_DELAY_MS = 120;
+const DEFAULT_OWNER_DENYLIST = [
+  "windowsterminal",
+  "windowsterminal.exe",
+  "windows terminal",
+  "openconsole",
+  "openconsole.exe",
+  "wezterm",
+  "alacritty",
+  "mintty",
+  "conhost",
+  "cmd.exe",
+  "code",
+  "code.exe",
+  "powershell",
+  "pwsh",
+  "bash",
+  "cursor",
+  "cursor.exe",
+  "wsl",
+];
 const ACTIVE_STATE_FILE = "pi-superwhisper-paste-active.json";
 const FOCUS_IN = "\x1b[I";
 const FOCUS_OUT = "\x1b[O";
 const ENABLE_FOCUS_REPORTING = "\x1b[?1004h";
 const DISABLE_FOCUS_REPORTING = "\x1b[?1004l";
 const INSTANCE_ID = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const CTRL_C = "\x03";
+const CTRL_INSERT = "\x1b[2;5~";
+const CTRL_SHIFT_INSERT = "\x1b[2;6~";
+const CTRL_SHIFT_C_CSI_U = "\x1b[99;6u";
+const CTRL_SHIFT_UPPER_C_CSI_U = "\x1b[67;6u";
 
 type BridgeMode = "off" | "on";
+
+type ClipboardSnapshot = {
+  text?: string;
+  ownerProcessName?: string;
+  ownerProcessPath?: string;
+};
 
 type PiEditorUi = {
   setStatus(key: string, value: string | undefined): void;
@@ -42,11 +76,13 @@ type SessionHandle = {
 type BridgeState = {
   mode: BridgeMode;
   interval?: NodeJS.Timeout;
+  baselineRefreshTimeout?: NodeJS.Timeout;
   generation: number;
   session?: SessionHandle;
   inFlightGeneration?: number;
   activatingGeneration?: number;
   terminalFocused: boolean;
+  suppressPasteUntil?: number;
   unsubscribeTerminalInput?: () => void;
   lastClipboard?: string;
   lastPasted?: string;
@@ -77,13 +113,44 @@ function maxChars(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CHARS;
 }
 
+/** Ignore clipboard changes briefly after local copy shortcuts. */
+function ignoreCopyMs(): number {
+  const parsed = Number(process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_IGNORE_COPY_MS;
+}
+
+/** Process-name/path substrings denied from triggering auto-paste. */
+function ownerDenylist(): string[] {
+  const raw = process.env.PI_SUPERWHISPER_PASTE_OWNER_DENYLIST;
+  if (!raw) return DEFAULT_OWNER_DENYLIST;
+
+  const tokens = raw
+    .split(",")
+    .map((token) => token.trim().toLowerCase())
+    .filter(Boolean);
+
+  return tokens.length > 0 ? tokens : DEFAULT_OWNER_DENYLIST;
+}
+
 /** Status bar label for the paste bridge. */
 function statusText(): string | undefined {
   if (state.mode === "off") return undefined;
   const focusText = state.terminalFocused ? "active" : "standby";
   return state.lastPasteSummary
-    ? `SW paste: ${focusText} (${state.lastPasteSummary})`
-    : `SW paste: ${focusText}`;
+    ? `SW paste v${EXTENSION_VERSION}: ${focusText} (${state.lastPasteSummary})`
+    : `SW paste v${EXTENSION_VERSION}: ${focusText}`;
+}
+
+/** Short display name for clipboard owner debugging. */
+function clipboardOwnerSummary(snapshot: ClipboardSnapshot): string {
+  const name = snapshot.ownerProcessName?.trim();
+  if (name) return name;
+
+  const rawPath = snapshot.ownerProcessPath?.trim();
+  if (!rawPath) return "unknown";
+
+  const segments = rawPath.split(/[\\/]/).filter(Boolean);
+  return segments.at(-1) ?? rawPath;
 }
 
 /** True when `ctx`/`generation` still match the active Pi session. */
@@ -164,17 +231,43 @@ function markPasted(ctx: PiRuntimeContext, generation: number, text: string): vo
 function clipboardPowerShellScript(limit: number): string {
   return [
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    "$signature = @\"",
+    "using System;",
+    "using System.Runtime.InteropServices;",
+    "public static class ClipboardOwnerNative {",
+    "  [DllImport(\"user32.dll\")] public static extern IntPtr GetClipboardOwner();",
+    "  [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);",
+    "}",
+    "\"@",
+    "Add-Type -TypeDefinition $signature -ErrorAction SilentlyContinue",
     `$limit = ${limit}`,
     "$text = Get-Clipboard -Raw -Format Text -ErrorAction SilentlyContinue",
+    "$ownerProcessName = $null",
+    "$ownerProcessPath = $null",
+    "try {",
+    "  $ownerWindow = [ClipboardOwnerNative]::GetClipboardOwner()",
+    "  if ($ownerWindow -ne [IntPtr]::Zero) {",
+    "    $ownerPid = 0",
+    "    [void][ClipboardOwnerNative]::GetWindowThreadProcessId($ownerWindow, [ref]$ownerPid)",
+    "    if ($ownerPid -gt 0) {",
+    "      $ownerProcess = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue",
+    "      if ($null -ne $ownerProcess) {",
+    "        $ownerProcessName = $ownerProcess.ProcessName",
+    "        $ownerProcessPath = $ownerProcess.Path",
+    "      }",
+    "    }",
+    "  }",
+    "} catch {}",
     "if ($null -ne $text) {",
     "  if ($text.Length -gt $limit) { $text = $text.Substring(0, $limit) }",
-    "  [Console]::Out.Write($text)",
     "}",
-  ].join("; ");
+    "$result = @{ text = $text; ownerProcessName = $ownerProcessName; ownerProcessPath = $ownerProcessPath }",
+    "[Console]::Out.Write(($result | ConvertTo-Json -Compress))",
+  ].join("\n");
 }
 
-/** Reads clipboard text via PowerShell; returns undefined on failure or oversize output. */
-async function readClipboardText(): Promise<string | undefined> {
+/** Reads clipboard text and owner metadata via PowerShell. */
+async function readClipboardSnapshot(): Promise<ClipboardSnapshot | undefined> {
   const limit = maxChars();
 
   try {
@@ -190,8 +283,17 @@ async function readClipboardText(): Promise<string | undefined> {
     );
 
     const stdout = typeof result.stdout === "string" ? result.stdout : undefined;
-    if (stdout === undefined) return undefined;
-    return stdout.length > limit ? stdout.slice(0, limit) : stdout;
+    if (!stdout) return undefined;
+
+    const snapshot = JSON.parse(stdout) as ClipboardSnapshot;
+    const text = typeof snapshot.text === "string" ? snapshot.text : undefined;
+    return {
+      text: text && text.length > limit ? text.slice(0, limit) : text,
+      ownerProcessName:
+        typeof snapshot.ownerProcessName === "string" ? snapshot.ownerProcessName : undefined,
+      ownerProcessPath:
+        typeof snapshot.ownerProcessPath === "string" ? snapshot.ownerProcessPath : undefined,
+    };
   } catch {
     // Oversized clipboard, PowerShell failure, or maxBuffer must not break extension load.
     return undefined;
@@ -237,9 +339,24 @@ async function refreshClipboardBaseline(
   ctx: PiRuntimeContext,
   generation: number,
 ): Promise<void> {
-  const text = await readClipboardText();
+  const text = (await readClipboardSnapshot())?.text;
   if (!isCurrentSession(ctx, generation)) return;
   if (text !== undefined) state.lastClipboard = text;
+}
+
+/** Best-effort delayed baseline refresh after local copy shortcuts. */
+function scheduleClipboardBaselineRefresh(ctx: PiRuntimeContext, generation: number): void {
+  if (!isCurrentSession(ctx, generation)) return;
+
+  if (state.baselineRefreshTimeout) {
+    clearTimeout(state.baselineRefreshTimeout);
+    state.baselineRefreshTimeout = undefined;
+  }
+
+  state.baselineRefreshTimeout = setTimeout(() => {
+    state.baselineRefreshTimeout = undefined;
+    if (isCurrentSession(ctx, generation)) void refreshClipboardBaseline(ctx, generation);
+  }, BASELINE_REFRESH_DELAY_MS);
 }
 
 /** Marks tab focused, refreshes clipboard baseline, claims active tab. */
@@ -267,6 +384,38 @@ async function markActiveFromInput(ctx: PiRuntimeContext, generation: number): P
   await claimActiveTab();
   if (!isCurrentSession(ctx, generation)) return;
   setStatus(ctx, generation);
+}
+
+/** True while recent local copy shortcuts should suppress bridge pastes. */
+function shouldSuppressPasteForRecentCopy(): boolean {
+  return (state.suppressPasteUntil ?? 0) > Date.now();
+}
+
+/** Detects common terminal copy shortcuts forwarded to Pi. */
+function isLocalCopyShortcut(data: string): boolean {
+  return [
+    CTRL_C,
+    CTRL_INSERT,
+    CTRL_SHIFT_INSERT,
+    CTRL_SHIFT_C_CSI_U,
+    CTRL_SHIFT_UPPER_C_CSI_U,
+  ].includes(data);
+}
+
+/** Suppresses auto-paste briefly after local terminal copy intent. */
+function suppressPasteAfterLocalCopy(ctx: PiRuntimeContext, generation: number): void {
+  if (!isCurrentSession(ctx, generation)) return;
+  state.suppressPasteUntil = Date.now() + ignoreCopyMs();
+  state.lastPasteSummary = "blocked recent copy";
+  void markActiveFromInput(ctx, generation);
+  scheduleClipboardBaselineRefresh(ctx, generation);
+}
+
+/** True when clipboard owner metadata does not look like a terminal copy source. */
+function shouldAcceptClipboardSource(snapshot: ClipboardSnapshot): boolean {
+  const owner = `${snapshot.ownerProcessName ?? ""}\n${snapshot.ownerProcessPath ?? ""}`.toLowerCase();
+  if (!owner.trim()) return true;
+  return !ownerDenylist().some((token) => owner.includes(token));
 }
 
 /** Whether clipboard text should be auto-pasted into the editor. */
@@ -298,17 +447,35 @@ async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): 
 
   state.inFlightGeneration = generation;
   try {
-    const text = await readClipboardText();
+    const snapshot = await readClipboardSnapshot();
+    const text = snapshot?.text;
     if (!isCurrentSession(ctx, generation)) return;
     if (text === undefined || text === state.lastClipboard) return;
 
     state.lastClipboard = text;
+    if (!snapshot) {
+      state.lastPasteSummary = "clipboard read failed";
+      setStatus(ctx, generation);
+      return;
+    }
+    if (!shouldAcceptClipboardSource(snapshot)) {
+      state.lastPasteSummary = `blocked ${clipboardOwnerSummary(snapshot)}`;
+      setStatus(ctx, generation);
+      return;
+    }
+    if (shouldSuppressPasteForRecentCopy()) {
+      state.lastPasteSummary = `blocked recent copy (${clipboardOwnerSummary(snapshot)})`;
+      setStatus(ctx, generation);
+      return;
+    }
     if (!shouldPaste(text, ctx, generation)) return;
     if (!(await isActiveTab())) return;
     if (!isCurrentSession(ctx, generation)) return;
 
     if (!pasteToEditor(ctx, generation, text)) return;
     markPasted(ctx, generation, text);
+    state.lastPasteSummary = `${text.length} chars via ${clipboardOwnerSummary(snapshot)}`;
+    setStatus(ctx, generation);
   } catch {
     // Clipboard polling should stay quiet while the user is typing.
   } finally {
@@ -343,6 +510,11 @@ function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): 
         return { consume: true };
       }
 
+      if (isLocalCopyShortcut(data)) {
+        suppressPasteAfterLocalCopy(ctx, generation);
+        return undefined;
+      }
+
       if (data.length > 0) {
         void markActiveFromInput(ctx, generation);
       }
@@ -374,9 +546,14 @@ function teardownSessionResources(): void {
     clearInterval(state.interval);
     state.interval = undefined;
   }
+  if (state.baselineRefreshTimeout) {
+    clearTimeout(state.baselineRefreshTimeout);
+    state.baselineRefreshTimeout = undefined;
+  }
   teardownTerminalFocusTracking();
   state.inFlightGeneration = undefined;
   state.activatingGeneration = undefined;
+  state.suppressPasteUntil = undefined;
 }
 
 /** Starts a new session generation and tears down the previous one. */
@@ -423,7 +600,7 @@ function stopPolling(ctx: PiRuntimeContext, generation: number): void {
 
 /** Baselines clipboard then starts polling (session_start path). */
 async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<void> {
-  const text = await readClipboardText();
+  const text = (await readClipboardSnapshot())?.text;
   if (!isCurrentSession(ctx, generation)) return;
   state.lastClipboard = text;
   ensurePolling(ctx, generation);
@@ -431,7 +608,7 @@ async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<
 
 /** Enables bridge mode and notifies the user. */
 async function arm(ctx: PiRuntimeContext, generation: number): Promise<void> {
-  const text = await readClipboardText();
+  const text = (await readClipboardSnapshot())?.text;
   if (!isCurrentSession(ctx, generation)) return;
   state.lastClipboard = text;
   state.mode = "on";

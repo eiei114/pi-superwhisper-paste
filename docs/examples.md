@@ -28,6 +28,8 @@ Run these commands inside Pi's input box:
 | `PI_SUPERWHISPER_PASTE` | `on` | Set to `off`, `0`, `false`, or `no` to disable by default. |
 | `PI_SUPERWHISPER_PASTE_INTERVAL_MS` | `800` | Clipboard polling interval. |
 | `PI_SUPERWHISPER_PASTE_MAX_CHARS` | `8000` | Maximum clipboard text length to paste. |
+| `PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS` | `1500` | Ignore clipboard changes briefly after local terminal copy shortcuts. |
+| `PI_SUPERWHISPER_PASTE_OWNER_DENYLIST` | `windowsterminal,...` | Comma-separated clipboard owner process/path substrings blocked from auto-paste. |
 
 ## Expected workflow
 
@@ -40,3 +42,7 @@ Run these commands inside Pi's input box:
 When multiple Pi tabs are open, only the tab that most recently had terminal focus or keyboard input should paste the new clipboard text.
 
 The bridge does not wait for Pi's agent turn to become idle. If Pi is thinking, the active tab should still receive the next Superwhisper clipboard update.
+
+When you copy text inside the active CLI, the bridge now suppresses auto-paste briefly and refreshes the clipboard baseline so the copied text is not inserted into Pi.
+
+The bridge also inspects the Windows clipboard owner and blocks auto-paste when the owner looks like a terminal/CLI app.

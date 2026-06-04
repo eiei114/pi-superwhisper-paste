@@ -35,6 +35,21 @@ test("extension gates clipboard paste to the active terminal tab", () => {
   assert.match(extensionSource, /claimActiveTab/);
 });
 
+test("extension suppresses local terminal copy clipboard changes", () => {
+  assert.match(extensionSource, /PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS/);
+  assert.match(extensionSource, /isLocalCopyShortcut/);
+  assert.match(extensionSource, /suppressPasteAfterLocalCopy/);
+  assert.match(extensionSource, /shouldSuppressPasteForRecentCopy/);
+});
+
+test("extension filters clipboard sources to avoid terminal owners", () => {
+  assert.match(extensionSource, /PI_SUPERWHISPER_PASTE_OWNER_DENYLIST/);
+  assert.match(extensionSource, /GetClipboardOwner/);
+  assert.match(extensionSource, /ownerProcessName/);
+  assert.match(extensionSource, /shouldAcceptClipboardSource/);
+  assert.match(extensionSource, /windowsterminal/);
+});
+
 test("extension keeps pasting while the agent is busy", () => {
   assert.doesNotMatch(extensionSource, /isIdle/);
 });
@@ -47,7 +62,7 @@ test("extension registers control commands for slash autocomplete", () => {
 test("extension truncates clipboard reads before PowerShell stdout", () => {
   assert.match(extensionSource, /\$limit = \$\{limit\}/);
   assert.match(extensionSource, /Substring\(0, \$limit\)/);
-  assert.match(extensionSource, /async function readClipboardText[\s\S]*catch \{/);
+  assert.match(extensionSource, /async function readClipboardSnapshot[\s\S]*catch \{/);
 });
 
 test("extension guards stale session callbacks before touching Pi UI", () => {

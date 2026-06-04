@@ -115,7 +115,7 @@ try {
   run(`git rev-parse --verify ${baseRef}`);
   changed = run(`git diff --name-only ${baseRef}...HEAD`).split("\n").filter(Boolean);
 } catch {
-  console.log("version:check skip ? base ref not available (local run?)");
+  console.log("version:check skip - base ref not available (local run?)");
   process.exit(0);
 }
 
@@ -126,7 +126,7 @@ const versionDelta = compareSemver(headVersion, baseVersion);
 
 if (versionDelta < 0) {
   console.error(
-    `version:check fail ? package.json version went backwards (${baseVersion} -> ${headVersion}).`,
+    `version:check fail - package.json version went backwards (${baseVersion} -> ${headVersion}).`,
   );
   process.exit(1);
 }
@@ -134,29 +134,29 @@ if (versionDelta < 0) {
 if (versionDelta === 0) {
   if (publishableChanged) {
     console.log(
-      `version:check ok ? publishable paths changed with no version bump (${baseVersion} -> ${headVersion})`,
+      `version:check ok - publishable paths changed with no version bump (${baseVersion} -> ${headVersion})`,
     );
   } else {
-    console.log("version:check ok ? no version bump requested");
+    console.log("version:check ok - no version bump requested");
   }
   process.exit(0);
 }
 
 if (isMajorBump(baseVersion, headVersion) && !hasMajorApproval()) {
   console.error(
-    "version:check fail ? major version bump requires explicit human approval. Add 'major-approved' to the PR title/body or rerun locally with ALLOW_MAJOR_VERSION_BUMP=1.",
+    "version:check fail - major version bump requires explicit human approval. Add 'major-approved' to the PR title/body or rerun locally with ALLOW_MAJOR_VERSION_BUMP=1.",
   );
   process.exit(1);
 }
 
 if (!changed.includes("CHANGELOG.md")) {
   console.error(
-    "version:check fail ? version bumped, but CHANGELOG.md was not updated in this PR.",
+    "version:check fail - version bumped, but CHANGELOG.md was not updated in this PR.",
   );
   process.exit(1);
 }
 
 console.log(
-  `version:check ok ? ${baseVersion} -> ${headVersion}, CHANGELOG.md updated`,
+  `version:check ok - ${baseVersion} -> ${headVersion}, CHANGELOG.md updated`,
 );
 process.exit(0);
