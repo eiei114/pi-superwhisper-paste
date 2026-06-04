@@ -119,10 +119,27 @@ test("regression: stale session callbacks do not bubble Pi's stale-ctx guard", a
   const tempModules = [];
 
   const execFileMock = (_file, _args, _options, callback) => {
-    queueMicrotask(() => callback(null, "clipboard baseline", ""));
+    queueMicrotask(() =>
+      callback(
+        null,
+        JSON.stringify({
+          text: "clipboard baseline",
+          ownerProcessName: "Superwhisper",
+          ownerProcessPath: "C:\\Program Files\\Superwhisper\\Superwhisper.exe",
+        }),
+        "",
+      ),
+    );
     return { kill() {} };
   };
-  execFileMock[promisify.custom] = async () => ({ stdout: "clipboard baseline", stderr: "" });
+  execFileMock[promisify.custom] = async () => ({
+    stdout: JSON.stringify({
+      text: "clipboard baseline",
+      ownerProcessName: "Superwhisper",
+      ownerProcessPath: "C:\\Program Files\\Superwhisper\\Superwhisper.exe",
+    }),
+    stderr: "",
+  });
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();

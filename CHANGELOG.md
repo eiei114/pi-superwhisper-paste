@@ -4,12 +4,70 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
-## [0.1.5] - 2026-06-03
+## [0.1.14] - 2026-06-05
+
+### Changed
+
+- Re-add `Code` / `Cursor` host processes to the clipboard-owner denylist so editor-hosted clipboard updates are blocked again during debugging.
+
+## [0.1.13] - 2026-06-05
+
+### Fixed
+
+- Remove `Code.exe` / `Cursor.exe` from the terminal-owner denylist so editor-hosted Superwhisper clipboard updates are not blocked just because Pi is running inside Code/Cursor.
+
+## [0.1.12] - 2026-06-05
+
+### Changed
+
+- Add an explicit `v0.1.12` marker to the status text so stale package loads are visible during live debugging.
+
+## [0.1.11] - 2026-06-05
+
+### Fixed
+
+- Broaden the terminal clipboard-owner denylist with `OpenConsole` / explicit `.exe` variants.
+- Surface the last clipboard decision in the Pi status text (`blocked ...`, `... via ...`) so real-machine owner mismatches can be diagnosed quickly.
+
+## [0.1.10] - 2026-06-05
+
+### Fixed
+
+- Fix the Windows PowerShell clipboard-owner probe script so the owner-aware bridge works in real Pi sessions instead of failing on multiline `Add-Type` syntax.
+
+## [0.1.9] - 2026-06-05
+
+### Fixed
+
+- Replace the strict Superwhisper owner allowlist with a terminal-owner denylist so unknown Superwhisper owner names still auto-paste while terminal/CLI clipboard owners stay blocked.
+
+## [0.1.8] - 2026-06-05
+
+### Fixed
+
+- Filter clipboard updates by clipboard-owner process so Pi auto-pastes only when the clipboard owner looks like Superwhisper.
+- Keep local terminal copy suppression as a fallback for forwarded copy shortcuts while blocking mouse/right-click terminal copies via owner filtering.
+
+## [0.1.7] - 2026-06-05
+
+### Fixed
+
+- Suppress auto-paste for a short window after local terminal copy shortcuts so copying inside the active CLI no longer pastes into Pi.
+- Refresh the clipboard baseline after local copy intent so the bridge keeps waiting for the next Superwhisper clipboard update.
+
+## [0.1.6] - 2026-06-04
+
+### Changed
+
+- Added `version:check` PR guard support: package script + `scripts/check-version-bump.mjs`.
+- Added CI verification that publishable changes must bump `package.json` and update `CHANGELOG.md` in the same PR.
 
 ### Fixed
 
 - Truncate clipboard text in PowerShell before writing stdout so huge clipboards no longer exceed Node `maxBuffer` on extension load.
 - Treat clipboard read failures (including `maxBuffer`) as empty reads so `session_start` never surfaces as an extension error.
+
+## [0.1.5] - 2026-06-03
 
 ## [0.1.4] - 2026-06-03
 

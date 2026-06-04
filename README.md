@@ -50,6 +50,8 @@ pi install git:github.com/eiei114/pi-superwhisper-paste
 - Default-on after the extension loads.
 - Slash commands: `/sw-paste:on` and `/sw-paste:off`.
 - Windows clipboard polling with active-tab gating.
+- Brief copy-suppression window so local terminal copy actions do not get auto-pasted back into Pi.
+- Clipboard-owner filtering so terminal/CLI-owned clipboard updates stay blocked by default.
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
