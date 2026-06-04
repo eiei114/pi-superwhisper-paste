@@ -18,7 +18,8 @@ jobs:
           package-manager-cache: false
       - run: npm ci
       - run: npm run ci
-      - name: Verify version bump on publishable changes
+
+      - name: Verify version bump policy
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: origin/${{ github.base_ref }}

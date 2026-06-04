@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /**
- * PR guard: publishable paths changed => package.json semver must increase
- * and CHANGELOG.md must be updated in the same diff.
+ * PR guard for optional version bumps.
  *
- * Publishable paths: template defaults + package.json `files` + `pi.extensions`.
+ * Rules:
+ * - version bump is optional even when publishable paths changed
+ * - if version is bumped, semver must increase
+ * - if version is bumped, CHANGELOG.md must be updated in the same diff
+ * - major bumps require explicit human approval
+ *
+ * Publishable paths: template defaults + package.json files + pi.extensions.
  *
  * Usage:
  *   node scripts/check-version-bump.mjs
  *   BASE_REF=origin/main node scripts/check-version-bump.mjs
+ *   ALLOW_MAJOR_VERSION_BUMP=1 BASE_REF=origin/main node scripts/check-version-bump.mjs
  */
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -44,6 +50,31 @@ function compareSemver(a, b) {
     if (va[i] !== vb[i]) return va[i] - vb[i];
   }
   return 0;
+}
+
+function getSemverParts(v) {
+  return parseSemver(v) ?? [0, 0, 0];
+}
+
+function isMajorBump(baseVersion, headVersion) {
+  const [baseMajor] = getSemverParts(baseVersion);
+  const [headMajor] = getSemverParts(headVersion);
+  return headMajor > baseMajor;
+}
+
+function hasMajorApproval() {
+  if (process.env.ALLOW_MAJOR_VERSION_BUMP === "1") return true;
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath || !existsSync(eventPath)) return false;
+  try {
+    const event = JSON.parse(readFileSync(eventPath, "utf8"));
+    const pr = event.pull_request ?? {};
+    const haystack = `${pr.title ?? ""}
+${pr.body ?? ""}`.toLowerCase();
+    return haystack.includes("major-approved");
+  } catch {
+    return false;
+  }
 }
 
 function readPackageVersion(ref) {
@@ -84,34 +115,48 @@ try {
   run(`git rev-parse --verify ${baseRef}`);
   changed = run(`git diff --name-only ${baseRef}...HEAD`).split("\n").filter(Boolean);
 } catch {
-  console.log("version:check skip — base ref not available (local run?)");
+  console.log("version:check skip - base ref not available (local run?)");
   process.exit(0);
 }
 
 const publishableChanged = changed.some((f) => isPublishablePath(f, publishable));
-if (!publishableChanged) {
-  console.log("version:check ok — no publishable paths changed");
+const baseVersion = readPackageVersion(baseRef);
+const headVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+const versionDelta = compareSemver(headVersion, baseVersion);
+
+if (versionDelta < 0) {
+  console.error(
+    `version:check fail - package.json version went backwards (${baseVersion} -> ${headVersion}).`,
+  );
+  process.exit(1);
+}
+
+if (versionDelta === 0) {
+  if (publishableChanged) {
+    console.log(
+      `version:check ok - publishable paths changed with no version bump (${baseVersion} -> ${headVersion})`,
+    );
+  } else {
+    console.log("version:check ok - no version bump requested");
+  }
   process.exit(0);
 }
 
-const baseVersion = readPackageVersion(baseRef);
-const headVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
-
-if (compareSemver(headVersion, baseVersion) <= 0) {
+if (isMajorBump(baseVersion, headVersion) && !hasMajorApproval()) {
   console.error(
-    `version:check fail — publishable files changed but package.json version did not increase (${baseVersion} -> ${headVersion}). Bump patch/minor/major per issue metadata.`,
+    "version:check fail - major version bump requires explicit human approval. Add 'major-approved' to the PR title/body or rerun locally with ALLOW_MAJOR_VERSION_BUMP=1.",
   );
   process.exit(1);
 }
 
 if (!changed.includes("CHANGELOG.md")) {
   console.error(
-    "version:check fail — publishable files changed and version bumped, but CHANGELOG.md was not updated in this PR.",
+    "version:check fail - version bumped, but CHANGELOG.md was not updated in this PR.",
   );
   process.exit(1);
 }
 
 console.log(
-  `version:check ok — ${baseVersion} -> ${headVersion}, CHANGELOG.md updated`,
+  `version:check ok - ${baseVersion} -> ${headVersion}, CHANGELOG.md updated`,
 );
 process.exit(0);
