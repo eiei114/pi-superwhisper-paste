@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.15] - 2026-06-05
+
+### Changed
+
+- Remove stale template-maintenance docs (`github-template.md`, `repository-settings.md`, `typescript.md`) from the published package.
+
 ## [0.1.14] - 2026-06-05
 
 ### Changed
