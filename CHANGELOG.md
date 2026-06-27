@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.16] - 2026-06-27
+
+### Changed
+
+- Align README with the current Pi extension template structure while preserving Windows install guidance and behavior notes.
+
 ## [0.1.15] - 2026-06-05
 
 ### Changed
