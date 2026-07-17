@@ -28,6 +28,16 @@ test("package metadata points at the OSS repository", () => {
   );
 });
 
+test("extension status version matches package.json", () => {
+  const match = extensionSource.match(/const EXTENSION_VERSION = "([^"]+)"/);
+  assert.ok(match, "EXTENSION_VERSION constant is declared in extensions/index.ts");
+  assert.equal(
+    match[1],
+    packageJson.version,
+    "EXTENSION_VERSION must stay aligned with package.json for live debugging status text",
+  );
+});
+
 test("extension gates clipboard paste to the active terminal tab", () => {
   assert.match(extensionSource, /ENABLE_FOCUS_REPORTING/);
   assert.match(extensionSource, /onTerminalInput/);
