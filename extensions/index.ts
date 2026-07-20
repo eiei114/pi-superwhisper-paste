@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.1.17";
+const EXTENSION_VERSION = "0.1.18";
 
 const STATUS_KEY = "superwhisper-paste";
 const DEFAULT_INTERVAL_MS = 800;
