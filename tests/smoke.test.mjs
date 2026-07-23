@@ -4,6 +4,7 @@ import test from "node:test";
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const extensionSource = await readFile(new URL("../extensions/index.ts", import.meta.url), "utf8");
+const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 
 test("package declares pi resources", () => {
   assert.deepEqual(packageJson.pi.extensions, ["./extensions"]);
@@ -36,6 +37,18 @@ test("extension status version matches package.json", () => {
     packageJson.version,
     "EXTENSION_VERSION must stay aligned with package.json for live debugging status text",
   );
+});
+
+test("README pinned install example matches package.json", () => {
+  const pins = [...readme.matchAll(/pi-superwhisper-paste@(\d+\.\d+\.\d+)/g)].map((match) => match[1]);
+  assert.ok(pins.length > 0, "README should include a pinned npm install example");
+  for (const pin of pins) {
+    assert.equal(
+      pin,
+      packageJson.version,
+      "README pinned install examples must match package.json for reproducible installs",
+    );
+  }
 });
 
 test("extension gates clipboard paste to the active terminal tab", () => {
