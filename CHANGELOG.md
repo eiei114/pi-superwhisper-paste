@@ -4,13 +4,27 @@
 
 ### Changed
 
-- Bump package version to `0.1.18` for the next patch release.
-
-- Add Buy Me a Coffee sponsor button to README and native GitHub funding link via `.github/FUNDING.yml`.
+- Align README pinned npm install example with `package.json` (#38).
 
 All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
+
+## [0.1.18] - 2026-07-21
+
+### Changed
+
+- Bump package version and align extension status version constant with `package.json`.
+
+## [0.1.17] - 2026-07-04
+
+### Changed
+
+- Add Buy Me a Coffee sponsor button to README and native GitHub funding link via `.github/FUNDING.yml`.
+
+### Fixed
+
+- Align `EXTENSION_VERSION` in the extension with `package.json` so Pi status text no longer reports a stale build during debugging (#35).
 
 ## [0.1.16] - 2026-06-27
 

@@ -5,6 +5,7 @@ import test from "node:test";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const extensionSource = await readFile(new URL("../extensions/index.ts", import.meta.url), "utf8");
 const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+const changelog = await readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8");
 
 test("package declares pi resources", () => {
   assert.deepEqual(packageJson.pi.extensions, ["./extensions"]);
@@ -49,6 +50,23 @@ test("README pinned install example matches package.json", () => {
       "README pinned install examples must match package.json for reproducible installs",
     );
   }
+});
+
+test("CHANGELOG documents the current package version in a release section", () => {
+  const escapedVersion = packageJson.version.replace(/\./g, "\\.");
+  assert.match(
+    changelog,
+    new RegExp(`## \\[${escapedVersion}\\]`),
+    `CHANGELOG must include a [${packageJson.version}] release section matching package.json`,
+  );
+  const staleUnreleasedPattern = new RegExp(
+    "## Unreleased[\\s\\S]*Bump package version to `" + escapedVersion + "`",
+  );
+  assert.doesNotMatch(
+    changelog,
+    staleUnreleasedPattern,
+    "Released version bumps must not remain under Unreleased",
+  );
 });
 
 test("extension gates clipboard paste to the active terminal tab", () => {
