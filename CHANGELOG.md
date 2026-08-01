@@ -1,14 +1,14 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+This project follows semantic versioning.
+
 ## Unreleased
 
 ### Changed
 
 - Align README pinned npm install example with `package.json` (#38).
-
-All notable changes to this project will be documented in this file.
-
-This project follows semantic versioning.
 
 ## [0.1.18] - 2026-07-21
 

@@ -59,12 +59,14 @@ test("CHANGELOG documents the current package version in a release section", () 
     new RegExp(`## \\[${escapedVersion}\\]`),
     `CHANGELOG must include a [${packageJson.version}] release section matching package.json`,
   );
-  const staleUnreleasedPattern = new RegExp(
-    "## Unreleased[\\s\\S]*Bump package version to `" + escapedVersion + "`",
+  const unreleasedSectionMatch = changelog.match(
+    /(?:^|\n)## Unreleased\b([\s\S]*?)(?=\n## \[|$)/,
   );
+  assert.ok(unreleasedSectionMatch, "CHANGELOG must include an Unreleased section");
+
   assert.doesNotMatch(
-    changelog,
-    staleUnreleasedPattern,
+    unreleasedSectionMatch[1],
+    /Bump package version\b/,
     "Released version bumps must not remain under Unreleased",
   );
 });
