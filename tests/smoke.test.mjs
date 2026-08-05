@@ -69,6 +69,11 @@ test("CHANGELOG documents the current package version in a release section", () 
     /Bump package version\b/,
     "Released version bumps must not remain under Unreleased",
   );
+  assert.doesNotMatch(
+    unreleasedSectionMatch[1],
+    /Align README pinned npm install example\b/,
+    "Released README alignment must not remain under Unreleased",
+  );
 });
 
 test("extension gates clipboard paste to the active terminal tab", () => {
