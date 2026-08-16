@@ -76,6 +76,14 @@ test("CHANGELOG documents the current package version in a release section", () 
   );
 });
 
+test("CHANGELOG release sections use real dates instead of template placeholders", () => {
+  assert.doesNotMatch(
+    changelog,
+    /## \[[\d.]+\] - YYYY-MM-DD/,
+    "CHANGELOG release headers must not keep template placeholder dates",
+  );
+});
+
 test("extension gates clipboard paste to the active terminal tab", () => {
   assert.match(extensionSource, /ENABLE_FOCUS_REPORTING/);
   assert.match(extensionSource, /onTerminalInput/);

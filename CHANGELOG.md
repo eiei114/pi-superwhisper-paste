@@ -144,7 +144,7 @@ This project follows semantic versioning.
 - Align CI and publish workflows with the maintained Pi OSS release pattern.
 - Skip npm publish when the exact package version is already published.
 
-## [0.1.0] - YYYY-MM-DD
+## [0.1.0] - 2026-05-30
 
 ### Added
 
