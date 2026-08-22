@@ -4,25 +4,19 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { syncBuiltinESMExports } from "node:module";
+import { stripTypeScriptTypes, syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { promisify } from "node:util";
-import ts from "typescript";
 
 const extensionUrl = new URL("../extensions/index.ts", import.meta.url);
 
 async function importExtensionFromTypeScript() {
   const source = await readFile(extensionUrl, "utf8");
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-    },
-  });
+  const compiled = stripTypeScriptTypes(source, { mode: "strip" });
 
   const tempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-test-"));
   const modulePath = join(tempDir, "extension.mjs");
-  await writeFile(modulePath, compiled.outputText, "utf8");
+  await writeFile(modulePath, compiled, "utf8");
 
   return {
     module: await import(`${pathToFileURL(modulePath).href}?t=${Date.now()}`),

@@ -6,6 +6,12 @@ This project follows semantic versioning.
 
 ## Unreleased
 
+## [0.1.20] - 2026-08-22
+
+### Changed
+
+- Support the TypeScript 7 compiler package by using Node's built-in type stripping in runtime-loading regression tests.
+
 ## [0.1.19] - 2026-08-04
 
 ### Changed
