@@ -40,7 +40,7 @@ pi install npm:pi-superwhisper-paste
 Pin a specific version when you want reproducible installs:
 
 ```bash
-pi install npm:pi-superwhisper-paste@0.1.19
+pi install npm:pi-superwhisper-paste@0.1.20
 ```
 
 Install into the current project instead of your user Pi settings:
