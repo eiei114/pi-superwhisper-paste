@@ -104,24 +104,29 @@ test("docs/examples.md env defaults match extension constants", () => {
     "docs/examples.md must document PI_SUPERWHISPER_PASTE_OWNER_DENYLIST default",
   );
 
-  for (const entry of defaultDenylistEntries) {
-    if (entry.endsWith(".exe")) {
-      const baseName = entry.slice(0, -4);
-      assert.ok(
-        ownerDenylistRow[1].toLowerCase().includes(entry.toLowerCase()) ||
-          (ownerDenylistRow[1].toLowerCase().includes(baseName.toLowerCase()) &&
-            /\.exe variants/i.test(ownerDenylistRow[1])),
-        `docs/examples.md default denylist must mention ${entry} or ${baseName} with .exe variants`,
-      );
-      continue;
+  const documentedValue = ownerDenylistRow[1];
+  const documentedDenylistEntries = new Set(
+    documentedValue
+      .replace(/\s*\(and \.exe variants\)\s*$/i, "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (/\(and \.exe variants\)/i.test(documentedValue)) {
+    for (const entry of defaultDenylistEntries) {
+      if (!entry.endsWith(".exe")) continue;
+      const baseName = entry.slice(0, -4).toLowerCase();
+      if (documentedDenylistEntries.has(baseName)) {
+        documentedDenylistEntries.add(entry.toLowerCase());
+      }
     }
-
-    assert.match(
-      ownerDenylistRow[1],
-      new RegExp(entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
-      `docs/examples.md default denylist must mention ${entry}`,
-    );
   }
+
+  assert.deepEqual(
+    [...documentedDenylistEntries].sort(),
+    [...new Set(defaultDenylistEntries.map((entry) => entry.toLowerCase()))].sort(),
+    "docs/examples.md default denylist must exactly match DEFAULT_OWNER_DENYLIST",
+  );
 
   assert.match(examplesDoc, /\| `PI_SUPERWHISPER_PASTE` \| `on` \|/);
   assert.match(examplesDoc, /\| `PI_SUPERWHISPER_PASTE_INTERVAL_MS` \| `800` \|/);
