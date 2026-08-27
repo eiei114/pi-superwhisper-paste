@@ -6,6 +6,7 @@ const packageJson = JSON.parse(await readFile(new URL("../package.json", import.
 const extensionSource = await readFile(new URL("../extensions/index.ts", import.meta.url), "utf8");
 const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 const changelog = await readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+const examplesDoc = await readFile(new URL("../docs/examples.md", import.meta.url), "utf8");
 
 test("package declares pi resources", () => {
   assert.deepEqual(packageJson.pi.extensions, ["./extensions"]);
@@ -82,6 +83,55 @@ test("CHANGELOG release sections use real dates instead of template placeholders
     /## \[[\d.]+\] - YYYY-MM-DD/,
     "CHANGELOG release headers must not keep template placeholder dates",
   );
+});
+
+test("docs/examples.md env defaults match extension constants", () => {
+  const defaultDenylistMatch = extensionSource.match(
+    /const DEFAULT_OWNER_DENYLIST = \[([\s\S]*?)\];/,
+  );
+  assert.ok(defaultDenylistMatch, "DEFAULT_OWNER_DENYLIST must be declared in extensions/index.ts");
+
+  const defaultDenylistEntries = [...defaultDenylistMatch[1].matchAll(/"([^"]+)"/g)].map(
+    (match) => match[1],
+  );
+  assert.ok(defaultDenylistEntries.length > 0, "DEFAULT_OWNER_DENYLIST must include entries");
+
+  const ownerDenylistRow = examplesDoc.match(
+    /\| `PI_SUPERWHISPER_PASTE_OWNER_DENYLIST` \| `([^`]+)` \|/,
+  );
+  assert.ok(
+    ownerDenylistRow,
+    "docs/examples.md must document PI_SUPERWHISPER_PASTE_OWNER_DENYLIST default",
+  );
+
+  const documentedValue = ownerDenylistRow[1];
+  const documentedDenylistEntries = new Set(
+    documentedValue
+      .replace(/\s*\(and \.exe variants\)\s*$/i, "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (/\(and \.exe variants\)/i.test(documentedValue)) {
+    for (const entry of defaultDenylistEntries) {
+      if (!entry.endsWith(".exe")) continue;
+      const baseName = entry.slice(0, -4).toLowerCase();
+      if (documentedDenylistEntries.has(baseName)) {
+        documentedDenylistEntries.add(entry.toLowerCase());
+      }
+    }
+  }
+
+  assert.deepEqual(
+    [...documentedDenylistEntries].sort(),
+    [...new Set(defaultDenylistEntries.map((entry) => entry.toLowerCase()))].sort(),
+    "docs/examples.md default denylist must exactly match DEFAULT_OWNER_DENYLIST",
+  );
+
+  assert.match(examplesDoc, /\| `PI_SUPERWHISPER_PASTE` \| `on` \|/);
+  assert.match(examplesDoc, /\| `PI_SUPERWHISPER_PASTE_INTERVAL_MS` \| `800` \|/);
+  assert.match(examplesDoc, /\| `PI_SUPERWHISPER_PASTE_MAX_CHARS` \| `8000` \|/);
+  assert.match(examplesDoc, /\| `PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS` \| `1500` \|/);
 });
 
 test("extension gates clipboard paste to the active terminal tab", () => {
