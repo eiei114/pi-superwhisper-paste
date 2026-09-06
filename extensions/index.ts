@@ -87,7 +87,12 @@ type BridgeState = {
   lastClipboard?: string;
   lastPasted?: string;
   lastPasteSummary?: string;
+  activeTabCache?: { ok: boolean; checkedAt: number };
 };
+
+let cachedOwnerDenylistEnv: string | undefined;
+let cachedOwnerDenylist: readonly string[] | undefined;
+let cachedClipboardScript: { limit: number; script: string } | undefined;
 
 const state: BridgeState = {
   mode: defaultMode(),
@@ -120,16 +125,23 @@ function ignoreCopyMs(): number {
 }
 
 /** Process-name/path substrings denied from triggering auto-paste. */
-function ownerDenylist(): string[] {
-  const raw = process.env.PI_SUPERWHISPER_PASTE_OWNER_DENYLIST;
-  if (!raw) return DEFAULT_OWNER_DENYLIST;
+function ownerDenylist(): readonly string[] {
+  const raw = process.env.PI_SUPERWHISPER_PASTE_OWNER_DENYLIST ?? "";
+  if (cachedOwnerDenylist && cachedOwnerDenylistEnv === raw) return cachedOwnerDenylist;
+
+  cachedOwnerDenylistEnv = raw;
+  if (!raw) {
+    cachedOwnerDenylist = DEFAULT_OWNER_DENYLIST;
+    return cachedOwnerDenylist;
+  }
 
   const tokens = raw
     .split(",")
     .map((token) => token.trim().toLowerCase())
     .filter(Boolean);
 
-  return tokens.length > 0 ? tokens : DEFAULT_OWNER_DENYLIST;
+  cachedOwnerDenylist = tokens.length > 0 ? tokens : DEFAULT_OWNER_DENYLIST;
+  return cachedOwnerDenylist;
 }
 
 /** Status bar label for the paste bridge. */
@@ -227,8 +239,17 @@ function markPasted(ctx: PiRuntimeContext, generation: number, text: string): vo
   setStatus(ctx, generation);
 }
 
+/** Returns a cached PowerShell clipboard script for the current char limit. */
+function clipboardPowerShellCommand(limit: number): string {
+  if (cachedClipboardScript?.limit === limit) return cachedClipboardScript.script;
+
+  const script = buildClipboardPowerShellScript(limit);
+  cachedClipboardScript = { limit, script };
+  return script;
+}
+
 /** Builds a PowerShell command that reads clipboard text truncated to `limit` characters. */
-function clipboardPowerShellScript(limit: number): string {
+function buildClipboardPowerShellScript(limit: number): string {
   return [
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
     "$signature = @\"",
@@ -273,7 +294,7 @@ async function readClipboardSnapshot(): Promise<ClipboardSnapshot | undefined> {
   try {
     const result = await execFileAsync(
       "powershell.exe",
-      ["-NoProfile", "-Command", clipboardPowerShellScript(limit)],
+      ["-NoProfile", "-Command", clipboardPowerShellCommand(limit)],
       {
         encoding: "utf8",
         maxBuffer: limit * 4 + 1024,
@@ -305,6 +326,11 @@ function activeStatePath(): string {
   return join(tmpdir(), ACTIVE_STATE_FILE);
 }
 
+/** Clears cached active-tab ownership between focus or session changes. */
+function invalidateActiveTabCache(): void {
+  state.activeTabCache = undefined;
+}
+
 /** Writes this Pi instance as the active tab for paste gating. */
 async function claimActiveTab(): Promise<void> {
   const claim = {
@@ -315,7 +341,9 @@ async function claimActiveTab(): Promise<void> {
 
   try {
     await writeFile(activeStatePath(), JSON.stringify(claim), "utf8");
+    state.activeTabCache = { ok: true, checkedAt: Date.now() };
   } catch {
+    invalidateActiveTabCache();
     // Focus tracking is best-effort; clipboard safety still falls back to local focus state.
   }
 }
@@ -324,10 +352,16 @@ async function claimActiveTab(): Promise<void> {
 async function isActiveTab(): Promise<boolean> {
   if (!state.terminalFocused) return false;
 
+  const now = Date.now();
+  const cache = state.activeTabCache;
+  if (cache && now - cache.checkedAt < intervalMs()) return cache.ok;
+
   try {
     const raw = await readFile(activeStatePath(), "utf8");
     const claim = JSON.parse(raw) as { instanceId?: string };
-    return claim.instanceId === INSTANCE_ID;
+    const ok = claim.instanceId === INSTANCE_ID;
+    state.activeTabCache = { ok, checkedAt: now };
+    return ok;
   } catch {
     await claimActiveTab();
     return true;
@@ -506,6 +540,7 @@ function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): 
 
       if (data === FOCUS_OUT) {
         state.terminalFocused = false;
+        invalidateActiveTabCache();
         setStatus(ctx, generation);
         return { consume: true };
       }
@@ -551,6 +586,7 @@ function teardownSessionResources(): void {
     state.baselineRefreshTimeout = undefined;
   }
   teardownTerminalFocusTracking();
+  invalidateActiveTabCache();
   state.inFlightGeneration = undefined;
   state.activatingGeneration = undefined;
   state.suppressPasteUntil = undefined;

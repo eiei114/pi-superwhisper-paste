@@ -6,6 +6,10 @@ This project follows semantic versioning.
 
 ## Unreleased
 
+### Changed
+
+- Cache clipboard poll hot-path helpers (PowerShell command, owner denylist, active-tab claim) to reduce per-interval allocation and filesystem reads during polling.
+
 ## [0.1.20] - 2026-08-22
 
 ### Changed
