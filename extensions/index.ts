@@ -341,7 +341,8 @@ async function claimActiveTab(): Promise<void> {
 
   try {
     await writeFile(activeStatePath(), JSON.stringify(claim), "utf8");
-    state.activeTabCache = { ok: true, checkedAt: Date.now() };
+    // Cache only negative ownership: a cached positive claim could let another
+    // instance's overwrite go unnoticed and paste into an inactive tab.
   } catch {
     invalidateActiveTabCache();
     // Focus tracking is best-effort; clipboard safety still falls back to local focus state.
@@ -354,13 +355,13 @@ async function isActiveTab(): Promise<boolean> {
 
   const now = Date.now();
   const cache = state.activeTabCache;
-  if (cache && now - cache.checkedAt < intervalMs()) return cache.ok;
+  if (cache?.ok === false && now - cache.checkedAt < intervalMs()) return false;
 
   try {
     const raw = await readFile(activeStatePath(), "utf8");
     const claim = JSON.parse(raw) as { instanceId?: string };
     const ok = claim.instanceId === INSTANCE_ID;
-    state.activeTabCache = { ok, checkedAt: now };
+    state.activeTabCache = ok ? undefined : { ok: false, checkedAt: now };
     return ok;
   } catch {
     await claimActiveTab();

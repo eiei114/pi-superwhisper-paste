@@ -11,8 +11,15 @@ import { promisify } from "node:util";
 const extensionUrl = new URL("../extensions/index.ts", import.meta.url);
 const extensionSource = await readFile(extensionUrl, "utf8");
 
-async function importExtensionFromTypeScript() {
-  const source = await readFile(extensionUrl, "utf8");
+function instrumentExtensionSource(source) {
+  return source.replace(
+    "function buildClipboardPowerShellScript(limit: number): string {",
+    "globalThis.__clipboardCommandBuildCount = (globalThis.__clipboardCommandBuildCount ?? 0);\nfunction buildClipboardPowerShellScript(limit: number): string { globalThis.__clipboardCommandBuildCount++;",
+  );
+}
+
+async function importExtensionFromTypeScript(sourceOverride) {
+  const source = sourceOverride ?? (await readFile(extensionUrl, "utf8"));
   const compiled = stripTypeScriptTypes(source, { mode: "strip" });
 
   const tempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-perf-"));
@@ -92,7 +99,10 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
 
   try {
-    const imported = await importExtensionFromTypeScript();
+    globalThis.__clipboardCommandBuildCount = 0;
+    const imported = await importExtensionFromTypeScript(
+      instrumentExtensionSource(await readFile(extensionUrl, "utf8")),
+    );
     tempModules.push(imported);
     const superwhisperPaste = imported.module.default;
 
@@ -120,9 +130,9 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
     assert.ok(commands.length >= 2, "expected multiple clipboard reads during polling");
     assert.equal(
-      commands[0],
-      commands[1],
-      "clipboard poll should reuse the cached PowerShell command string",
+      globalThis.__clipboardCommandBuildCount,
+      1,
+      "clipboard poll should build the PowerShell command only once",
     );
   } finally {
     childProcess.execFile = originalExecFile;
