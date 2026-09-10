@@ -53,6 +53,9 @@ test("extension caches clipboard poll hot-path helpers", () => {
   assert.match(extensionSource, /function clipboardPowerShellCommand/);
   assert.match(extensionSource, /let cachedClipboardScript/);
   assert.match(extensionSource, /let cachedOwnerDenylist/);
+  assert.match(extensionSource, /function runtimeConfig/);
+  assert.match(extensionSource, /let cachedRuntimeConfig/);
+  assert.match(extensionSource, /const ACTIVE_STATE_PATH/);
   assert.match(extensionSource, /function invalidateActiveTabCache/);
   assert.match(extensionSource, /state\.activeTabCache/);
 });
