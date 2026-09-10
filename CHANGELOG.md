@@ -9,6 +9,7 @@ This project follows semantic versioning.
 ### Changed
 
 - Cache clipboard poll hot-path helpers (PowerShell command, owner denylist, active-tab claim) to reduce per-interval allocation and filesystem reads during polling.
+- Cache runtime poll limits parsed from env and hoist the active-tab state path to module scope so interval ticks avoid repeated `Number()` parsing and `join(tmpdir(), …)` work.
 
 ## [0.1.20] - 2026-08-22
 

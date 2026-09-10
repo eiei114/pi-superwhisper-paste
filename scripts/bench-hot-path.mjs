@@ -99,6 +99,27 @@ function clipboardPowerShellScriptCached(limit) {
   return script;
 }
 
+function runtimeConfigUncached() {
+  const parsedInterval = Number(process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS);
+  const parsedMaxChars = Number(process.env.PI_SUPERWHISPER_PASTE_MAX_CHARS);
+  const parsedIgnoreCopy = Number(process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS);
+  return {
+    intervalMs:
+      Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 800,
+    maxChars: Number.isFinite(parsedMaxChars) && parsedMaxChars > 0 ? parsedMaxChars : 8000,
+    ignoreCopyMs:
+      Number.isFinite(parsedIgnoreCopy) && parsedIgnoreCopy >= 0 ? parsedIgnoreCopy : 1500,
+  };
+}
+
+let cachedRuntimeConfig;
+
+function runtimeConfigCached() {
+  if (cachedRuntimeConfig) return cachedRuntimeConfig;
+  cachedRuntimeConfig = runtimeConfigUncached();
+  return cachedRuntimeConfig;
+}
+
 function bench(label, fn, iterations = 50_000) {
   fn();
   const start = performance.now();
@@ -111,6 +132,8 @@ const results = [
   bench("clipboardPowerShellScript (cached)", () => clipboardPowerShellScriptCached(8000)),
   bench("ownerDenylist (uncached)", () => ownerDenylistUncached()),
   bench("ownerDenylist (cached)", () => ownerDenylistCached()),
+  bench("runtimeConfig (uncached)", () => runtimeConfigUncached()),
+  bench("runtimeConfig (cached)", () => runtimeConfigCached()),
 ];
 
 console.log(JSON.stringify(results, null, 2));

@@ -34,6 +34,7 @@ const DEFAULT_OWNER_DENYLIST = [
   "wsl",
 ];
 const ACTIVE_STATE_FILE = "pi-superwhisper-paste-active.json";
+const ACTIVE_STATE_PATH = join(tmpdir(), ACTIVE_STATE_FILE);
 const FOCUS_IN = "\x1b[I";
 const FOCUS_OUT = "\x1b[O";
 const ENABLE_FOCUS_REPORTING = "\x1b[?1004h";
@@ -94,6 +95,14 @@ let cachedOwnerDenylistEnv: string | undefined;
 let cachedOwnerDenylist: readonly string[] | undefined;
 let cachedClipboardScript: { limit: number; script: string } | undefined;
 
+type RuntimeConfig = {
+  intervalMs: number;
+  maxChars: number;
+  ignoreCopyMs: number;
+};
+
+let cachedRuntimeConfig: RuntimeConfig | undefined;
+
 const state: BridgeState = {
   mode: defaultMode(),
   generation: 0,
@@ -106,22 +115,40 @@ function defaultMode(): BridgeMode {
   return ["0", "false", "no", "off"].includes(raw) ? "off" : "on";
 }
 
+/** Cached poll/copy limits parsed from env (hot path on every interval tick). */
+function runtimeConfig(): RuntimeConfig {
+  if (cachedRuntimeConfig) return cachedRuntimeConfig;
+
+  const parsedInterval = Number(process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS);
+  const parsedMaxChars = Number(process.env.PI_SUPERWHISPER_PASTE_MAX_CHARS);
+  const parsedIgnoreCopy = Number(process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS);
+
+  cachedRuntimeConfig = {
+    intervalMs:
+      Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : DEFAULT_INTERVAL_MS,
+    maxChars:
+      Number.isFinite(parsedMaxChars) && parsedMaxChars > 0 ? parsedMaxChars : DEFAULT_MAX_CHARS,
+    ignoreCopyMs:
+      Number.isFinite(parsedIgnoreCopy) && parsedIgnoreCopy >= 0
+        ? parsedIgnoreCopy
+        : DEFAULT_IGNORE_COPY_MS,
+  };
+  return cachedRuntimeConfig;
+}
+
 /** Poll interval from env or default. */
 function intervalMs(): number {
-  const parsed = Number(process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INTERVAL_MS;
+  return runtimeConfig().intervalMs;
 }
 
 /** Max pasted characters from env or default. */
 function maxChars(): number {
-  const parsed = Number(process.env.PI_SUPERWHISPER_PASTE_MAX_CHARS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CHARS;
+  return runtimeConfig().maxChars;
 }
 
 /** Ignore clipboard changes briefly after local copy shortcuts. */
 function ignoreCopyMs(): number {
-  const parsed = Number(process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_IGNORE_COPY_MS;
+  return runtimeConfig().ignoreCopyMs;
 }
 
 /** Process-name/path substrings denied from triggering auto-paste. */
@@ -321,11 +348,6 @@ async function readClipboardSnapshot(): Promise<ClipboardSnapshot | undefined> {
   }
 }
 
-/** Temp file path for cross-tab active-instance claim. */
-function activeStatePath(): string {
-  return join(tmpdir(), ACTIVE_STATE_FILE);
-}
-
 /** Clears cached active-tab ownership between focus or session changes. */
 function invalidateActiveTabCache(): void {
   state.activeTabCache = undefined;
@@ -340,7 +362,7 @@ async function claimActiveTab(): Promise<void> {
   };
 
   try {
-    await writeFile(activeStatePath(), JSON.stringify(claim), "utf8");
+    await writeFile(ACTIVE_STATE_PATH, JSON.stringify(claim), "utf8");
     // Cache only negative ownership: a cached positive claim could let another
     // instance's overwrite go unnoticed and paste into an inactive tab.
   } catch {
@@ -358,7 +380,7 @@ async function isActiveTab(): Promise<boolean> {
   if (cache?.ok === false && now - cache.checkedAt < intervalMs()) return false;
 
   try {
-    const raw = await readFile(activeStatePath(), "utf8");
+    const raw = await readFile(ACTIVE_STATE_PATH, "utf8");
     const claim = JSON.parse(raw) as { instanceId?: string };
     const ok = claim.instanceId === INSTANCE_ID;
     state.activeTabCache = ok ? undefined : { ok: false, checkedAt: now };
