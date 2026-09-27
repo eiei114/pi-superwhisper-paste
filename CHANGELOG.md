@@ -25,11 +25,9 @@ This project follows semantic versioning.
 ## [0.1.22] - 2026-09-28
 
 - chore: periodic patch bump after 7+ days without npm publish
-
 ## [0.1.21] - 2026-09-28
 
 - chore: periodic patch bump after 7+ days without npm publish
-
 ## [0.1.20] - 2026-08-22
 
 ### Changed
