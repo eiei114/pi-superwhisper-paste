@@ -4,8 +4,6 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
-## Unreleased
-
 ## [0.1.23] - 2026-09-27
 
 - chore: periodic patch bump after 7+ days without npm publish
@@ -15,13 +13,6 @@ This project follows semantic versioning.
 All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
-
-## Unreleased
-
-### Changed
-
-- Cache clipboard poll hot-path helpers (PowerShell command, owner denylist, active-tab claim) to reduce per-interval allocation and filesystem reads during polling.
-- Cache runtime poll limits parsed from env and hoist the active-tab state path to module scope so interval ticks avoid repeated `Number()` parsing and `join(tmpdir(), …)` work.
 ## [0.1.22] - 2026-09-28
 
 - chore: periodic patch bump after 7+ days without npm publish
@@ -159,3 +150,5 @@ This project follows semantic versioning.
 - Initial Superwhisper paste bridge extension for Pi on Windows.
 - Default-on clipboard watcher with `/sw-paste:on` and `/sw-paste:off` controls.
 - CI and npm Trusted Publishing workflow from the Pi extension template.
+## Unreleased
+
