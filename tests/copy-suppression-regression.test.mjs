@@ -225,3 +225,102 @@ test("regression: Code host owner is blocked by terminal denylist", async () => 
     await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
   }
 });
+
+test("regression: local copy shortcuts suppress the next auto-paste", async () => {
+  const originalExecFile = childProcess.execFile;
+  const originalWrite = process.stdout.write;
+  const originalMode = process.env.PI_SUPERWHISPER_PASTE;
+  const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalIgnoreCopy = process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS;
+  const tempModules = [];
+
+  const superwhisperOwner = {
+    ownerProcessName: "Superwhisper",
+    ownerProcessPath: "C:\Program Files\Superwhisper\Superwhisper.exe",
+  };
+
+  let clipboardSnapshot = { text: "baseline", ...superwhisperOwner };
+
+  const execFileMock = (_file, _args, _options, callback) => {
+    queueMicrotask(() => callback(null, JSON.stringify(clipboardSnapshot), ""));
+    return { kill() {} };
+  };
+  execFileMock[promisify.custom] = async () => ({
+    stdout: JSON.stringify(clipboardSnapshot),
+    stderr: "",
+  });
+
+  childProcess.execFile = execFileMock;
+  syncBuiltinESMExports();
+  process.stdout.write = () => true;
+  process.env.PI_SUPERWHISPER_PASTE = "on";
+  process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
+  // Keep the suppression window well above the polling interval so the observed
+  // result reflects the shortcut lookup rather than timer jitter.
+  process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS = "1000";
+
+  let session = 0;
+  async function runSession(input) {
+    session += 1;
+    clipboardSnapshot = { text: `baseline ${session}`, ...superwhisperOwner };
+
+    const imported = await importExtensionFromTypeScript();
+    tempModules.push(imported);
+    const superwhisperPaste = imported.module.default;
+
+    const harness = createPiHarness();
+    superwhisperPaste(harness.pi);
+
+    const pasted = [];
+    const runtime = createRuntimeContext(pasted);
+    await harness.handler("session_start")({}, runtime.ctx);
+
+    if (input !== undefined) runtime.terminalInput(input);
+
+    const dictated = `dictated by superwhisper ${session}`;
+    clipboardSnapshot = { text: dictated, ...superwhisperOwner };
+    await wait(160);
+
+    await harness.handler("session_shutdown")();
+    return { pasted, dictated };
+  }
+
+  try {
+    for (const [label, input] of [
+      ["Ctrl+C", "\x03"],
+      ["Ctrl+Insert", "\x1b[2;5~"],
+      ["Ctrl+Shift+Insert", "\x1b[2;6~"],
+      ["Ctrl+Shift+C CSI-u", "\x1b[99;6u"],
+      ["Ctrl+Shift+Upper C CSI-u", "\x1b[67;6u"],
+    ]) {
+      const { pasted } = await runSession(input);
+      assert.deepEqual(
+        pasted,
+        [],
+        `local copy shortcut ${label} (${JSON.stringify(input)}) must suppress the next auto-paste`,
+      );
+    }
+
+    const { pasted, dictated } = await runSession("a");
+    assert.deepEqual(
+      pasted,
+      [dictated],
+      "plain terminal input must not suppress the next auto-paste",
+    );
+  } finally {
+    childProcess.execFile = originalExecFile;
+    syncBuiltinESMExports();
+    process.stdout.write = originalWrite;
+
+    if (originalMode === undefined) delete process.env.PI_SUPERWHISPER_PASTE;
+    else process.env.PI_SUPERWHISPER_PASTE = originalMode;
+
+    if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+    else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+
+    if (originalIgnoreCopy === undefined) delete process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS;
+    else process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS = originalIgnoreCopy;
+
+    await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
+  }
+});

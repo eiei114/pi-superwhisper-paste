@@ -60,6 +60,18 @@ test("extension caches clipboard poll hot-path helpers", () => {
   assert.match(extensionSource, /state\.activeTabCache/);
 });
 
+test("terminal copy shortcut lookup is allocated once", () => {
+  assert.match(extensionSource, /const LOCAL_COPY_SHORTCUTS = new Set\(\[/);
+  assert.match(
+    extensionSource,
+    /function isLocalCopyShortcut\(data: string\): boolean \{\s+return LOCAL_COPY_SHORTCUTS\.has\(data\);/,
+  );
+  assert.doesNotMatch(
+    extensionSource,
+    /function isLocalCopyShortcut[\s\S]*?\.includes\(data\)/,
+  );
+});
+
 test("regression: repeated clipboard reads reuse the cached PowerShell command", async () => {
   const originalExecFile = childProcess.execFile;
   const originalWrite = process.stdout.write;
