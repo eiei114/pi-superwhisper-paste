@@ -1,5 +1,5 @@
 /**
- * Micro-benchmark for clipboard poll hot-path helpers (uncached baseline).
+ * Micro-benchmark for clipboard poll and terminal input hot-path helpers (uncached baseline).
  * Run before/after perf changes: node scripts/bench-hot-path.mjs
  */
 const DEFAULT_OWNER_DENYLIST = [
@@ -22,6 +22,18 @@ const DEFAULT_OWNER_DENYLIST = [
   "cursor.exe",
   "wsl",
 ];
+const CTRL_C = "\x03";
+const CTRL_INSERT = "\x1b[2;5~";
+const CTRL_SHIFT_INSERT = "\x1b[2;6~";
+const CTRL_SHIFT_C_CSI_U = "\x1b[99;6u";
+const CTRL_SHIFT_UPPER_C_CSI_U = "\x1b[67;6u";
+const LOCAL_COPY_SHORTCUTS = new Set([
+  CTRL_C,
+  CTRL_INSERT,
+  CTRL_SHIFT_INSERT,
+  CTRL_SHIFT_C_CSI_U,
+  CTRL_SHIFT_UPPER_C_CSI_U,
+]);
 
 function clipboardPowerShellScript(limit) {
   return [
@@ -120,11 +132,37 @@ function runtimeConfigCached() {
   return cachedRuntimeConfig;
 }
 
+function localCopyShortcutUncached(data) {
+  return [
+    CTRL_C,
+    CTRL_INSERT,
+    CTRL_SHIFT_INSERT,
+    CTRL_SHIFT_C_CSI_U,
+    CTRL_SHIFT_UPPER_C_CSI_U,
+  ].includes(data);
+}
+
+function localCopyShortcutCached(data) {
+  return LOCAL_COPY_SHORTCUTS.has(data);
+}
+
 function bench(label, fn, iterations = 50_000) {
   fn();
   const start = performance.now();
   for (let i = 0; i < iterations; i += 1) fn();
   return { label, iterations, elapsed_ms: Number((performance.now() - start).toFixed(2)) };
+}
+
+function benchWithInput(label, fn, input, iterations = 50_000) {
+  fn(input);
+  const start = performance.now();
+  for (let i = 0; i < iterations; i += 1) fn(input);
+  return {
+    label,
+    iterations,
+    input: JSON.stringify(input),
+    elapsed_ms: Number((performance.now() - start).toFixed(2)),
+  };
 }
 
 const results = [
@@ -134,6 +172,8 @@ const results = [
   bench("ownerDenylist (cached)", () => ownerDenylistCached()),
   bench("runtimeConfig (uncached)", () => runtimeConfigUncached()),
   bench("runtimeConfig (cached)", () => runtimeConfigCached()),
+  benchWithInput("localCopyShortcut (array allocation)", localCopyShortcutUncached, "a"),
+  benchWithInput("localCopyShortcut (Set)", localCopyShortcutCached, "a"),
 ];
 
 console.log(JSON.stringify(results, null, 2));

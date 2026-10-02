@@ -45,6 +45,13 @@ const CTRL_INSERT = "\x1b[2;5~";
 const CTRL_SHIFT_INSERT = "\x1b[2;6~";
 const CTRL_SHIFT_C_CSI_U = "\x1b[99;6u";
 const CTRL_SHIFT_UPPER_C_CSI_U = "\x1b[67;6u";
+const LOCAL_COPY_SHORTCUTS = new Set([
+  CTRL_C,
+  CTRL_INSERT,
+  CTRL_SHIFT_INSERT,
+  CTRL_SHIFT_C_CSI_U,
+  CTRL_SHIFT_UPPER_C_CSI_U,
+]);
 
 type BridgeMode = "off" | "on";
 
@@ -450,13 +457,7 @@ function shouldSuppressPasteForRecentCopy(): boolean {
 
 /** Detects common terminal copy shortcuts forwarded to Pi. */
 function isLocalCopyShortcut(data: string): boolean {
-  return [
-    CTRL_C,
-    CTRL_INSERT,
-    CTRL_SHIFT_INSERT,
-    CTRL_SHIFT_C_CSI_U,
-    CTRL_SHIFT_UPPER_C_CSI_U,
-  ].includes(data);
+  return LOCAL_COPY_SHORTCUTS.has(data);
 }
 
 /** Suppresses auto-paste briefly after local terminal copy intent. */
