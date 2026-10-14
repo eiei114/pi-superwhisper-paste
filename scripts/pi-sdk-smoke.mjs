@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
   behaviorAssertions,
@@ -13,7 +13,11 @@ import {
 } from "./pi-sdk-smoke-contract.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const reportPath = resolve(root, "docs/verification/pi-sdk-smoke.json");
+// Routine CI/local runs must not overwrite the committed, platform-specific
+// record; refresh it only through an explicit `npm run smoke:pi:curated`.
+const reportPath = process.argv.includes("--update-curated-report")
+  ? resolve(root, "docs/verification/pi-sdk-smoke.json")
+  : resolve(root, ".tmp/pi-sdk-smoke.json");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const manifest = readJson(resolve(root, "package.json"));
 const sdkVersions = Object.fromEntries(SDK_NAMES.map((name) =>
@@ -66,10 +70,31 @@ function run(name, executable, args, input) {
   const hasLoadError = EXTENSION_LOAD_ERROR_PATTERN.test(fullOutput);
   const passed = exit_code === 0 && !result.error && !hasUnhandledError && !hasLoadError
     && assertions.every((item) => item.passed);
-  const evidence = fullOutput.slice(-6000) || String(result.error?.message ?? "No output captured");
+  const evidence = redactLocalPaths(fullOutput.slice(-6000) || String(result.error?.message ?? "No output captured"));
 
   return { name, command: "npm run smoke:pi", exit_code, passed, evidence, assertions,
     hasUnhandledError, hasLoadError };
+}
+
+// Redact machine-specific absolute paths so committed evidence never leaks a user
+// name or an internal workspace location.
+function redactLocalPaths(value) {
+  const text = String(value ?? "");
+  const candidates = [root, agentDir, homedir(), tmpdir(), process.env.TEMP, process.env.TMP];
+  const variants = new Set();
+  for (const item of candidates) {
+    if (!item) continue;
+    const normalized = item.replace(/[\/]+$/, "");
+    variants.add(normalized);
+    variants.add(normalized.replaceAll("\\", "/"));
+    variants.add(normalized.replaceAll("/", "\\"));
+  }
+  let out = text;
+  for (const variant of [...variants].filter(Boolean).sort((a, b) => b.length - a.length)) {
+    out = out.split(variant).join("<redacted-path>");
+    out = out.split(JSON.stringify(variant).slice(1, -1)).join("<redacted-path>");
+  }
+  return out;
 }
 
 function quotePowerShell(value) {
@@ -103,7 +128,12 @@ try {
     unhandled_errors: cases.filter((item) => item.hasUnhandledError).length,
     extension_load_errors: cases.filter((item) => item.hasLoadError
       || (item.name === "extension_load" && !item.passed)).length,
-    cases: cases.map(({ hasUnhandledError, hasLoadError, ...item }) => item),
+    cases: cases.map(({ hasUnhandledError, hasLoadError, ...item }) => ({
+      ...item,
+      assertions: (item.assertions ?? []).map((assertion) => ({
+        ...assertion, observed: redactLocalPaths(assertion.observed),
+      })),
+    })),
   };
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);

@@ -39,7 +39,8 @@
     "ci": "npm run typecheck && npm test && npm run smoke:pi && npm run pack:check",
     "pack:check": "npm pack --dry-run",
     "smoke:pi": "node scripts/pi-sdk-smoke.mjs",
-    "version:check": "node scripts/check-version-bump.mjs"
+    "version:check": "node scripts/check-version-bump.mjs",
+    "smoke:pi:curated": "node scripts/pi-sdk-smoke.mjs --update-curated-report"
   },
   "pi": {
     "extensions": [
