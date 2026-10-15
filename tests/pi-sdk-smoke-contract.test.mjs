@@ -93,8 +93,8 @@ test("malformed RPC must return a handled parser error; omitted/positive respons
 });
 
 test("host shell must return exact installed Pi SDK version, not merely exit zero", () => {
-  assert.equal(behaviorAssertions("host_shell", observed([], "1.1.0\r\n"))[0].passed, true);
-  for (const [output, code] of [["", 0], ["1.1.0 extra", 0], ["1.0.0", 0], ["1.1.0", 1]]) {
+  assert.equal(behaviorAssertions("host_shell", observed([], "1.2.0\r\n"))[0].passed, true);
+  for (const [output, code] of [["", 0], ["1.2.0 extra", 0], ["1.1.0", 0], ["1.2.0", 1]]) {
     assert.equal(behaviorAssertions("host_shell", observed([], output, code))[0].passed, false);
   }
 });

@@ -2,10 +2,10 @@
   "schema_version": 1,
   "verification_contract": "pi-sdk-behavior-v2",
   "sdk_versions": {
-    "@earendil-works/pi-agent-core": "1.1.0",
-    "@earendil-works/pi-ai": "1.1.0",
-    "@earendil-works/pi-coding-agent": "1.1.0",
-    "@earendil-works/pi-tui": "1.1.0"
+    "@earendil-works/pi-agent-core": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@earendil-works/pi-tui": "1.2.0"
   },
   "platform": "win32",
   "model_inference": "none; actual Pi host handles command discovery and deterministic /sw-paste:off input; clipboard access disabled",
@@ -33,12 +33,12 @@
       "command": "npm run smoke:pi",
       "exit_code": 0,
       "passed": true,
-      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"c4836b7a-d8e8-4f60-b724-a64fa48ab28b\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"d465449f-a1e4-4728-94cf-865a65098797\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
+      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"b25e0795-36a5-4f9a-9ec5-0e1430e1ac13\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"3faf82e7-932e-4d32-8a08-2ea0c58a2837\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
       "assertions": [
         {
           "id": "feature_response",
           "expected": "Real Pi handles /sw-paste:off and emits its disabled notification",
-          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"d465449f-a1e4-4728-94cf-865a65098797\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
+          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"3faf82e7-932e-4d32-8a08-2ea0c58a2837\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
           "passed": true
         }
       ]
@@ -63,7 +63,7 @@
       "command": "npm run smoke:pi",
       "exit_code": 0,
       "passed": true,
-      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"607120cd-2eeb-4da1-b1e0-2960d3f6cbdc\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"33180620-f83a-46c1-a4c4-b6836899f61d\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"get_commands\",\"success\":true,\"data\":{\"commands\":[{\"name\":\"sw-paste:on\",\"description\":\"Enable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}},{\"name\":\"sw-paste:off\",\"description\":\"Disable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}}]}}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
+      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"a92c0d85-4dc0-43ff-add0-abc4b05818d3\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"ffd7266c-b460-49fa-abec-cfba2a70e6f0\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"get_commands\",\"success\":true,\"data\":{\"commands\":[{\"name\":\"sw-paste:on\",\"description\":\"Enable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}},{\"name\":\"sw-paste:off\",\"description\":\"Disable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}}]}}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
       "assertions": [
         {
           "id": "reloaded_extension_registered",
@@ -74,7 +74,7 @@
         {
           "id": "reloaded_feature_response",
           "expected": "The second process handles /sw-paste:off and emits the feature notification",
-          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"33180620-f83a-46c1-a4c4-b6836899f61d\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
+          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"ffd7266c-b460-49fa-abec-cfba2a70e6f0\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
           "passed": true
         },
         {
@@ -90,12 +90,12 @@
       "command": "npm run smoke:pi",
       "exit_code": 0,
       "passed": true,
-      "evidence": "1.1.0\n",
+      "evidence": "1.2.0\n",
       "assertions": [
         {
           "id": "native_shell_boundary",
-          "expected": "The native host shell launches this checkout's Pi CLI and returns exactly 1.1.0",
-          "observed": "{\"exit_code\":0,\"output\":\"1.1.0\",\"expectedSdkVersion\":\"1.1.0\"}",
+          "expected": "The native host shell launches this checkout's Pi CLI and returns exactly 1.2.0",
+          "observed": "{\"exit_code\":0,\"output\":\"1.2.0\",\"expectedSdkVersion\":\"1.2.0\"}",
           "passed": true
         }
       ]
