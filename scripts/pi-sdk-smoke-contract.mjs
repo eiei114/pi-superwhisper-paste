@@ -1,9 +1,9 @@
 export const VERIFICATION_CONTRACT = "pi-sdk-behavior-v2";
 export const SDK_VERSIONS = Object.freeze({
-  "@earendil-works/pi-agent-core": "1.1.0",
-  "@earendil-works/pi-ai": "1.1.0",
-  "@earendil-works/pi-coding-agent": "1.1.0",
-  "@earendil-works/pi-tui": "1.1.0",
+  "@earendil-works/pi-agent-core": "1.2.0",
+  "@earendil-works/pi-ai": "1.2.0",
+  "@earendil-works/pi-coding-agent": "1.2.0",
+  "@earendil-works/pi-tui": "1.2.0",
 });
 export const SDK_NAMES = Object.keys(SDK_VERSIONS);
 export const UNHANDLED_ERROR_PATTERN = /UnhandledPromiseRejection|uncaught exception|shutdown error/i;
@@ -59,9 +59,25 @@ export function behaviorAssertions(name, { responses, fullOutput, exit_code, exp
     ];
   }
   if (name === "host_shell") {
-    return [assertion("native_shell_boundary", "The native host shell launches this checkout's Pi CLI and returns exactly 1.1.0",
+    return [assertion("native_shell_boundary", "The native host shell launches this checkout's Pi CLI and returns exactly 1.2.0",
       { exit_code, output: fullOutput.trim(), expectedSdkVersion },
       exit_code === 0 && fullOutput.trim() === expectedSdkVersion)];
   }
   throw new Error(`Unknown smoke case: ${name}`);
+}
+
+export function combineReloadCleanup(initialProcess, secondProcess) {
+  return {
+    ...secondProcess,
+    name: "reload_cleanup",
+    passed: initialProcess.passed && secondProcess.passed,
+    evidence: [
+      `Initial Pi process (completed before second launch): exit_code=${initialProcess.exit_code}, passed=${initialProcess.passed}`,
+      initialProcess.evidence,
+      `Second Pi process (source of reload assertions): exit_code=${secondProcess.exit_code}, passed=${secondProcess.passed}`,
+      secondProcess.evidence,
+    ].join("\n"),
+    hasUnhandledError: initialProcess.hasUnhandledError || secondProcess.hasUnhandledError,
+    hasLoadError: initialProcess.hasLoadError || secondProcess.hasLoadError,
+  };
 }

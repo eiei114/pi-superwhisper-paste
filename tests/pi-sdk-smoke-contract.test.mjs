@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   behaviorAssertions,
+  combineReloadCleanup,
   parseJsonLines,
   SDK_VERSIONS,
   VERIFICATION_CONTRACT,
@@ -81,6 +82,31 @@ test("reload requires second-host registration, feature response, and clean proc
   }
 });
 
+test("reload assertions fail when the second Pi process omits responses seen in the initial process", () => {
+  const makeRun = (name, responses) => {
+    const assertions = behaviorAssertions(name, observed(responses));
+    return {
+      name,
+      exit_code: 0,
+      passed: assertions.every((item) => item.passed),
+      evidence: JSON.stringify(responses),
+      assertions,
+      hasUnhandledError: false,
+      hasLoadError: false,
+    };
+  };
+  const initialProcess = makeRun("extension_load", [commandList]);
+  assert.equal(initialProcess.passed, true);
+
+  for (const secondResponses of [[], [prompt, notification], [commandList]]) {
+    const secondProcess = makeRun("reload_cleanup", secondResponses);
+    const result = combineReloadCleanup(initialProcess, secondProcess);
+    assert.equal(result.passed, false);
+    assert.ok(result.assertions.some((item) => item.passed === false));
+    assert.match(result.evidence, /Second Pi process \(source of reload assertions\)/);
+  }
+});
+
 test("malformed RPC must return a handled parser error; omitted/positive responses fail", () => {
   assert.equal(behaviorAssertions("error_path", observed([malformedRpc]))[0].passed, true);
   for (const invalid of [
@@ -93,8 +119,8 @@ test("malformed RPC must return a handled parser error; omitted/positive respons
 });
 
 test("host shell must return exact installed Pi SDK version, not merely exit zero", () => {
-  assert.equal(behaviorAssertions("host_shell", observed([], "1.1.0\r\n"))[0].passed, true);
-  for (const [output, code] of [["", 0], ["1.1.0 extra", 0], ["1.0.0", 0], ["1.1.0", 1]]) {
+  assert.equal(behaviorAssertions("host_shell", observed([], "1.2.0\r\n"))[0].passed, true);
+  for (const [output, code] of [["", 0], ["1.2.0 extra", 0], ["1.1.0", 0], ["1.2.0", 1]]) {
     assert.equal(behaviorAssertions("host_shell", observed([], output, code))[0].passed, false);
   }
 });
