@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
   behaviorAssertions,
+  combineReloadCleanup,
   EXTENSION_LOAD_ERROR_PATTERN,
   parseJsonLines,
   SDK_NAMES,
@@ -76,6 +77,14 @@ function run(name, executable, args, input) {
     hasUnhandledError, hasLoadError };
 }
 
+function runReloadCleanup() {
+  // spawnSync returns only after the initial host exits. Launch the reload check
+  // separately so its assertions can only observe the second Pi process.
+  const initialProcess = run("extension_load", process.execPath, rpcArgs, commandListInput);
+  const secondProcess = run("reload_cleanup", process.execPath, rpcArgs, reloadInput);
+  return combineReloadCleanup(initialProcess, secondProcess);
+}
+
 // Redact machine-specific absolute paths so committed evidence never leaks a user
 // name or an internal workspace location.
 function redactLocalPaths(value) {
@@ -106,7 +115,7 @@ try {
     run("extension_load", process.execPath, rpcArgs, commandListInput),
     run("happy_path", process.execPath, rpcArgs, featureInput),
     run("error_path", process.execPath, rpcArgs, "not-json\n"),
-    run("reload_cleanup", process.execPath, rpcArgs, reloadInput),
+    runReloadCleanup(),
   ];
 
   if (process.platform === "win32") {

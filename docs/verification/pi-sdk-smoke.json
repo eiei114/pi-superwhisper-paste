@@ -33,12 +33,12 @@
       "command": "npm run smoke:pi",
       "exit_code": 0,
       "passed": true,
-      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"b25e0795-36a5-4f9a-9ec5-0e1430e1ac13\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"3faf82e7-932e-4d32-8a08-2ea0c58a2837\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
+      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"32b37a7f-1bb8-4aed-80fc-dcb7077162a9\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"720695fe-062a-4466-bdef-5b77e2c507ec\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
       "assertions": [
         {
           "id": "feature_response",
           "expected": "Real Pi handles /sw-paste:off and emits its disabled notification",
-          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"3faf82e7-932e-4d32-8a08-2ea0c58a2837\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
+          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"720695fe-062a-4466-bdef-5b77e2c507ec\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
           "passed": true
         }
       ]
@@ -63,7 +63,7 @@
       "command": "npm run smoke:pi",
       "exit_code": 0,
       "passed": true,
-      "evidence": "{\"type\":\"extension_ui_request\",\"id\":\"a92c0d85-4dc0-43ff-add0-abc4b05818d3\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"ffd7266c-b460-49fa-abec-cfba2a70e6f0\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"get_commands\",\"success\":true,\"data\":{\"commands\":[{\"name\":\"sw-paste:on\",\"description\":\"Enable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}},{\"name\":\"sw-paste:off\",\"description\":\"Disable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}}]}}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
+      "evidence": "Initial Pi process (completed before second launch): exit_code=0, passed=true\n{\"type\":\"response\",\"command\":\"get_commands\",\"success\":true,\"data\":{\"commands\":[{\"name\":\"sw-paste:on\",\"description\":\"Enable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}},{\"name\":\"sw-paste:off\",\"description\":\"Disable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}}]}}\n\u001b[?1004l\u001b[?1004l\nSecond Pi process (source of reload assertions): exit_code=0, passed=true\n{\"type\":\"extension_ui_request\",\"id\":\"b236933f-d974-4509-9766-1531e29ecdd0\",\"method\":\"setStatus\",\"statusKey\":\"superwhisper-paste\"}\n{\"type\":\"extension_ui_request\",\"id\":\"9db8974e-0b2a-4a0f-b4b4-fd5a98dd8663\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}\n{\"type\":\"response\",\"command\":\"get_commands\",\"success\":true,\"data\":{\"commands\":[{\"name\":\"sw-paste:on\",\"description\":\"Enable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}},{\"name\":\"sw-paste:off\",\"description\":\"Disable the Superwhisper clipboard paste bridge\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<redacted-path>\\\\extensions\\\\index.ts\",\"source\":\"cli\",\"scope\":\"temporary\",\"origin\":\"top-level\"}}]}}\n{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}}\n\u001b[?1004l\u001b[?1004l\u001b[?1004l\u001b[?1004l",
       "assertions": [
         {
           "id": "reloaded_extension_registered",
@@ -74,7 +74,7 @@
         {
           "id": "reloaded_feature_response",
           "expected": "The second process handles /sw-paste:off and emits the feature notification",
-          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"ffd7266c-b460-49fa-abec-cfba2a70e6f0\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
+          "observed": "{\"prompt\":{\"type\":\"response\",\"command\":\"prompt\",\"success\":true,\"data\":{\"disposition\":\"handled\"}},\"notification\":{\"type\":\"extension_ui_request\",\"id\":\"9db8974e-0b2a-4a0f-b4b4-fd5a98dd8663\",\"method\":\"notify\",\"message\":\"Superwhisper paste bridge: disabled\",\"notifyType\":\"info\"}}",
           "passed": true
         },
         {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   behaviorAssertions,
+  combineReloadCleanup,
   parseJsonLines,
   SDK_VERSIONS,
   VERIFICATION_CONTRACT,
@@ -78,6 +79,31 @@ test("reload requires second-host registration, feature response, and clean proc
   }
   for (const [output, code] of [["shutdown error", 0], ["UnhandledPromiseRejection", 0], ["", 1]]) {
     assert.equal(behaviorAssertions("reload_cleanup", observed(undefined, output, code))[2].passed, false);
+  }
+});
+
+test("reload assertions fail when the second Pi process omits responses seen in the initial process", () => {
+  const makeRun = (name, responses) => {
+    const assertions = behaviorAssertions(name, observed(responses));
+    return {
+      name,
+      exit_code: 0,
+      passed: assertions.every((item) => item.passed),
+      evidence: JSON.stringify(responses),
+      assertions,
+      hasUnhandledError: false,
+      hasLoadError: false,
+    };
+  };
+  const initialProcess = makeRun("extension_load", [commandList]);
+  assert.equal(initialProcess.passed, true);
+
+  for (const secondResponses of [[], [prompt, notification], [commandList]]) {
+    const secondProcess = makeRun("reload_cleanup", secondResponses);
+    const result = combineReloadCleanup(initialProcess, secondProcess);
+    assert.equal(result.passed, false);
+    assert.ok(result.assertions.some((item) => item.passed === false));
+    assert.match(result.evidence, /Second Pi process \(source of reload assertions\)/);
   }
 });
 

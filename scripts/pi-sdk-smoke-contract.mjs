@@ -65,3 +65,19 @@ export function behaviorAssertions(name, { responses, fullOutput, exit_code, exp
   }
   throw new Error(`Unknown smoke case: ${name}`);
 }
+
+export function combineReloadCleanup(initialProcess, secondProcess) {
+  return {
+    ...secondProcess,
+    name: "reload_cleanup",
+    passed: initialProcess.passed && secondProcess.passed,
+    evidence: [
+      `Initial Pi process (completed before second launch): exit_code=${initialProcess.exit_code}, passed=${initialProcess.passed}`,
+      initialProcess.evidence,
+      `Second Pi process (source of reload assertions): exit_code=${secondProcess.exit_code}, passed=${secondProcess.passed}`,
+      secondProcess.evidence,
+    ].join("\n"),
+    hasUnhandledError: initialProcess.hasUnhandledError || secondProcess.hasUnhandledError,
+    hasLoadError: initialProcess.hasLoadError || secondProcess.hasLoadError,
+  };
+}
