@@ -77,7 +77,10 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalTemp = process.env.TEMP;
   const tempModules = [];
+  const isolatedTempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-perf-state-"));
+  let shutdownSession;
 
   const commands = [];
   const execFileMock = (_file, args, _options, callback) => {
@@ -112,6 +115,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
   process.stdout.write = () => true;
   process.env.PI_SUPERWHISPER_PASTE = "on";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
+  process.env.TEMP = isolatedTempDir;
 
   try {
     globalThis.__clipboardCommandBuildCount = 0;
@@ -123,6 +127,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
     const harness = createPiHarness();
     superwhisperPaste(harness.pi);
+    shutdownSession = harness.handler("session_shutdown");
 
     const ctx = {
       hasUI: true,
@@ -140,9 +145,11 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
     };
 
     await harness.handler("session_start")({}, ctx);
+    const startupReadCount = commands.length;
     await new Promise((resolve) => setTimeout(resolve, 90));
-    await harness.handler("session_shutdown")();
+    await shutdownSession();
 
+    assert.equal(startupReadCount, 1, "session startup should perform one clipboard read");
     assert.ok(commands.length >= 2, "expected multiple clipboard reads during polling");
     assert.equal(
       globalThis.__clipboardCommandBuildCount,
@@ -150,6 +157,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
       "clipboard poll should build the PowerShell command only once",
     );
   } finally {
+    shutdownSession?.();
     childProcess.execFile = originalExecFile;
     syncBuiltinESMExports();
     process.stdout.write = originalWrite;
@@ -159,7 +167,10 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
     if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
     else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+    if (originalTemp === undefined) delete process.env.TEMP;
+    else process.env.TEMP = originalTemp;
 
     await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
+    await rm(isolatedTempDir, { recursive: true, force: true });
   }
 });
