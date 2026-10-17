@@ -8,7 +8,7 @@ This project follows semantic versioning.
 
 ### Changed
 
-- Reuse the session clipboard baseline during activation instead of starting a duplicate PowerShell clipboard read.
+- Reuse the session clipboard baseline during activation instead of starting a duplicate PowerShell clipboard read, and preserve it when a focus-triggered refresh fails.
 
 ## [0.1.26] - 2026-10-16
 

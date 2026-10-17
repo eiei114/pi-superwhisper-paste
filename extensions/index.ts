@@ -407,8 +407,9 @@ async function refreshClipboardBaseline(
 ): Promise<void> {
   const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  state.lastClipboard = snapshot?.text;
-  state.clipboardBaselineReady = snapshot !== undefined;
+  if (!snapshot) return;
+  state.lastClipboard = snapshot.text;
+  state.clipboardBaselineReady = true;
 }
 
 /** Best-effort delayed baseline refresh after local copy shortcuts. */

@@ -175,7 +175,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
   }
 });
 
-test("regression: failed startup and arming reads establish a baseline before any paste", async () => {
+test("regression: clipboard read failures preserve the baseline before any paste", async () => {
   const originalExecFile = childProcess.execFile;
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
@@ -184,11 +184,22 @@ test("regression: failed startup and arming reads establish a baseline before an
   const isolatedTempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-baseline-state-"));
   const tempModules = [];
   let shutdownSession;
+  let terminalInputHandler;
   let failedReads = 2;
+  let failNextRead = false;
+  let resolveFocusReadFailure;
+  const focusReadFailure = new Promise((resolve) => {
+    resolveFocusReadFailure = resolve;
+  });
   let clipboardText = "existing clipboard text";
   const pasted = [];
 
   const readResult = () => {
+    if (failNextRead) {
+      failNextRead = false;
+      resolveFocusReadFailure();
+      return { error: new Error("PowerShell clipboard read failed") };
+    }
     if (failedReads > 0) {
       failedReads -= 1;
       return { error: new Error("PowerShell clipboard read failed") };
@@ -231,7 +242,8 @@ test("regression: failed startup and arming reads establish a baseline before an
       ui: {
         setStatus() {},
         notify() {},
-        onTerminalInput() {
+        onTerminalInput(handler) {
+          terminalInputHandler = handler;
           return () => {};
         },
         pasteToEditor(text) {
@@ -267,6 +279,22 @@ test("regression: failed startup and arming reads establish a baseline before an
     clipboardText = "new clipboard content after arming";
     await new Promise((resolve) => setTimeout(resolve, 70));
     assert.deepEqual(pasted, ["new clipboard content", "new clipboard content after arming"]);
+
+    failNextRead = true;
+    terminalInputHandler("\x1b[I");
+    await focusReadFailure;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    clipboardText = "new clipboard content after failed focus refresh";
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(
+      pasted,
+      [
+        "new clipboard content",
+        "new clipboard content after arming",
+        "new clipboard content after failed focus refresh",
+      ],
+      "a failed focus refresh must preserve the established baseline so later changes paste",
+    );
   } finally {
     shutdownSession?.();
     childProcess.execFile = originalExecFile;
