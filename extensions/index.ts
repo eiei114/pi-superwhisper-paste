@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.1.26";
+const EXTENSION_VERSION = "0.1.27";
 
 const STATUS_KEY = "superwhisper-paste";
 const DEFAULT_INTERVAL_MS = 800;
@@ -93,6 +93,7 @@ type BridgeState = {
   suppressPasteUntil?: number;
   unsubscribeTerminalInput?: () => void;
   lastClipboard?: string;
+  clipboardBaselineReady: boolean;
   lastPasted?: string;
   lastPasteSummary?: string;
   activeTabCache?: { ok: boolean; checkedAt: number };
@@ -114,6 +115,7 @@ const state: BridgeState = {
   mode: defaultMode(),
   generation: 0,
   terminalFocused: true,
+  clipboardBaselineReady: false,
 };
 
 /** Resolves bridge on/off from `PI_SUPERWHISPER_PASTE` (default on). */
@@ -403,9 +405,11 @@ async function refreshClipboardBaseline(
   ctx: PiRuntimeContext,
   generation: number,
 ): Promise<void> {
-  const text = (await readClipboardSnapshot())?.text;
+  const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  if (text !== undefined) state.lastClipboard = text;
+  if (!snapshot) return;
+  state.lastClipboard = snapshot.text;
+  state.clipboardBaselineReady = true;
 }
 
 /** Best-effort delayed baseline refresh after local copy shortcuts. */
@@ -424,14 +428,18 @@ function scheduleClipboardBaselineRefresh(ctx: PiRuntimeContext, generation: num
 }
 
 /** Marks tab focused, refreshes clipboard baseline, claims active tab. */
-async function activateTab(ctx: PiRuntimeContext, generation: number): Promise<void> {
+async function activateTab(
+  ctx: PiRuntimeContext,
+  generation: number,
+  refreshBaseline = true,
+): Promise<void> {
   if (!isCurrentSession(ctx, generation) || state.activatingGeneration !== undefined) return;
 
   state.activatingGeneration = generation;
   try {
     if (!isCurrentSession(ctx, generation)) return;
     state.terminalFocused = true;
-    await refreshClipboardBaseline(ctx, generation);
+    if (refreshBaseline) await refreshClipboardBaseline(ctx, generation);
     if (!isCurrentSession(ctx, generation)) return;
     await claimActiveTab();
     if (!isCurrentSession(ctx, generation)) return;
@@ -508,6 +516,12 @@ async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): 
     const snapshot = await readClipboardSnapshot();
     const text = snapshot?.text;
     if (!isCurrentSession(ctx, generation)) return;
+    if (!snapshot) return;
+    if (!state.clipboardBaselineReady) {
+      state.lastClipboard = text;
+      state.clipboardBaselineReady = true;
+      return;
+    }
     if (text === undefined || text === state.lastClipboard) return;
 
     state.lastClipboard = text;
@@ -542,7 +556,11 @@ async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): 
 }
 
 /** Enables terminal focus reporting and input hooks for this session. */
-function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): void {
+function setupTerminalFocusTracking(
+  ctx: PiRuntimeContext,
+  generation: number,
+  baselineAlreadyRead = false,
+): void {
   if (!isCurrentSession(ctx, generation)) return;
   if (state.unsubscribeTerminalInput) return;
 
@@ -551,7 +569,7 @@ function setupTerminalFocusTracking(ctx: PiRuntimeContext, generation: number): 
   } catch {
     // Best-effort terminal focus setup only.
   }
-  void activateTab(ctx, generation);
+  void activateTab(ctx, generation, !baselineAlreadyRead);
 
   safeWithCurrentUi(ctx, generation, (ui) => {
     state.unsubscribeTerminalInput = ui.onTerminalInput((data) => {
@@ -619,6 +637,8 @@ function teardownSessionResources(): void {
 /** Starts a new session generation and tears down the previous one. */
 function beginSession(ctx: PiRuntimeContext): number {
   teardownSessionResources();
+  state.lastClipboard = undefined;
+  state.clipboardBaselineReady = false;
   const generation = state.generation + 1;
   state.generation = generation;
   state.session = { generation, ctx };
@@ -639,10 +659,14 @@ function endSession(): void {
 }
 
 /** Starts clipboard polling and focus tracking when mode is on. */
-function ensurePolling(ctx: PiRuntimeContext, generation: number): void {
+function ensurePolling(
+  ctx: PiRuntimeContext,
+  generation: number,
+  baselineAlreadyRead = false,
+): void {
   if (!isCurrentSession(ctx, generation)) return;
 
-  setupTerminalFocusTracking(ctx, generation);
+  setupTerminalFocusTracking(ctx, generation, baselineAlreadyRead);
   setStatus(ctx, generation);
 
   if (state.interval) return;
@@ -660,19 +684,21 @@ function stopPolling(ctx: PiRuntimeContext, generation: number): void {
 
 /** Baselines clipboard then starts polling (session_start path). */
 async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<void> {
-  const text = (await readClipboardSnapshot())?.text;
+  const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  state.lastClipboard = text;
-  ensurePolling(ctx, generation);
+  state.lastClipboard = snapshot?.text;
+  state.clipboardBaselineReady = snapshot !== undefined;
+  ensurePolling(ctx, generation, snapshot !== undefined);
 }
 
 /** Enables bridge mode and notifies the user. */
 async function arm(ctx: PiRuntimeContext, generation: number): Promise<void> {
-  const text = (await readClipboardSnapshot())?.text;
+  const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  state.lastClipboard = text;
+  state.lastClipboard = snapshot?.text;
+  state.clipboardBaselineReady = snapshot !== undefined;
   state.mode = "on";
-  ensurePolling(ctx, generation);
+  ensurePolling(ctx, generation, snapshot !== undefined);
   notify(ctx, generation, "Superwhisper paste bridge: enabled", "info");
 }
 
