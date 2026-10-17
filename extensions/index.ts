@@ -93,6 +93,7 @@ type BridgeState = {
   suppressPasteUntil?: number;
   unsubscribeTerminalInput?: () => void;
   lastClipboard?: string;
+  clipboardBaselineReady: boolean;
   lastPasted?: string;
   lastPasteSummary?: string;
   activeTabCache?: { ok: boolean; checkedAt: number };
@@ -114,6 +115,7 @@ const state: BridgeState = {
   mode: defaultMode(),
   generation: 0,
   terminalFocused: true,
+  clipboardBaselineReady: false,
 };
 
 /** Resolves bridge on/off from `PI_SUPERWHISPER_PASTE` (default on). */
@@ -403,9 +405,10 @@ async function refreshClipboardBaseline(
   ctx: PiRuntimeContext,
   generation: number,
 ): Promise<void> {
-  const text = (await readClipboardSnapshot())?.text;
+  const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  if (text !== undefined) state.lastClipboard = text;
+  state.lastClipboard = snapshot?.text;
+  state.clipboardBaselineReady = snapshot !== undefined;
 }
 
 /** Best-effort delayed baseline refresh after local copy shortcuts. */
@@ -512,6 +515,12 @@ async function pasteClipboardChange(ctx: PiRuntimeContext, generation: number): 
     const snapshot = await readClipboardSnapshot();
     const text = snapshot?.text;
     if (!isCurrentSession(ctx, generation)) return;
+    if (!snapshot) return;
+    if (!state.clipboardBaselineReady) {
+      state.lastClipboard = text;
+      state.clipboardBaselineReady = true;
+      return;
+    }
     if (text === undefined || text === state.lastClipboard) return;
 
     state.lastClipboard = text;
@@ -627,6 +636,8 @@ function teardownSessionResources(): void {
 /** Starts a new session generation and tears down the previous one. */
 function beginSession(ctx: PiRuntimeContext): number {
   teardownSessionResources();
+  state.lastClipboard = undefined;
+  state.clipboardBaselineReady = false;
   const generation = state.generation + 1;
   state.generation = generation;
   state.session = { generation, ctx };
@@ -672,19 +683,21 @@ function stopPolling(ctx: PiRuntimeContext, generation: number): void {
 
 /** Baselines clipboard then starts polling (session_start path). */
 async function startPolling(ctx: PiRuntimeContext, generation: number): Promise<void> {
-  const text = (await readClipboardSnapshot())?.text;
+  const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  state.lastClipboard = text;
-  ensurePolling(ctx, generation, true);
+  state.lastClipboard = snapshot?.text;
+  state.clipboardBaselineReady = snapshot !== undefined;
+  ensurePolling(ctx, generation, snapshot !== undefined);
 }
 
 /** Enables bridge mode and notifies the user. */
 async function arm(ctx: PiRuntimeContext, generation: number): Promise<void> {
-  const text = (await readClipboardSnapshot())?.text;
+  const snapshot = await readClipboardSnapshot();
   if (!isCurrentSession(ctx, generation)) return;
-  state.lastClipboard = text;
+  state.lastClipboard = snapshot?.text;
+  state.clipboardBaselineReady = snapshot !== undefined;
   state.mode = "on";
-  ensurePolling(ctx, generation, true);
+  ensurePolling(ctx, generation, snapshot !== undefined);
   notify(ctx, generation, "Superwhisper paste bridge: enabled", "info");
 }
 

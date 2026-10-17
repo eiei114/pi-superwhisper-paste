@@ -174,3 +174,114 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
     await rm(isolatedTempDir, { recursive: true, force: true });
   }
 });
+
+test("regression: failed startup and arming reads establish a baseline before any paste", async () => {
+  const originalExecFile = childProcess.execFile;
+  const originalWrite = process.stdout.write;
+  const originalMode = process.env.PI_SUPERWHISPER_PASTE;
+  const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalTemp = process.env.TEMP;
+  const isolatedTempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-baseline-state-"));
+  const tempModules = [];
+  let shutdownSession;
+  let failedReads = 2;
+  let clipboardText = "existing clipboard text";
+  const pasted = [];
+
+  const readResult = () => {
+    if (failedReads > 0) {
+      failedReads -= 1;
+      return { error: new Error("PowerShell clipboard read failed") };
+    }
+    return {
+      stdout: JSON.stringify({
+        text: clipboardText,
+        ownerProcessName: "Superwhisper",
+        ownerProcessPath: "C:\\Program Files\\Superwhisper\\Superwhisper.exe",
+      }),
+    };
+  };
+  const execFileMock = (_file, _args, _options, callback) => {
+    const result = readResult();
+    queueMicrotask(() => callback(result.error ?? null, result.stdout ?? "", ""));
+    return { kill() {} };
+  };
+  execFileMock[promisify.custom] = async () => {
+    const result = readResult();
+    if (result.error) throw result.error;
+    return { stdout: result.stdout, stderr: "" };
+  };
+
+  childProcess.execFile = execFileMock;
+  syncBuiltinESMExports();
+  process.stdout.write = () => true;
+  process.env.PI_SUPERWHISPER_PASTE = "on";
+  process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "15";
+  process.env.TEMP = isolatedTempDir;
+
+  try {
+    const imported = await importExtensionFromTypeScript();
+    tempModules.push(imported);
+    const harness = createPiHarness();
+    imported.module.default(harness.pi);
+    shutdownSession = harness.handler("session_shutdown");
+
+    const ctx = {
+      hasUI: true,
+      ui: {
+        setStatus() {},
+        notify() {},
+        onTerminalInput() {
+          return () => {};
+        },
+        pasteToEditor(text) {
+          pasted.push(text);
+        },
+        getEditorText() {
+          return pasted.join("");
+        },
+      },
+    };
+
+    await harness.handler("session_start")({}, ctx);
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(pasted, [], "the first successful poll must seed, not paste, existing text");
+
+    clipboardText = "new clipboard content";
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(pasted, ["new clipboard content"], "later clipboard changes should paste");
+
+    shutdownSession();
+    shutdownSession = undefined;
+    failedReads = 2;
+    clipboardText = "text already present before arming";
+    await harness.handler("input")({ text: "/sw-paste:on" }, ctx);
+    shutdownSession = harness.handler("session_shutdown");
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(
+      pasted,
+      ["new clipboard content"],
+      "the first successful poll after a failed arm read must not paste existing text",
+    );
+
+    clipboardText = "new clipboard content after arming";
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(pasted, ["new clipboard content", "new clipboard content after arming"]);
+  } finally {
+    shutdownSession?.();
+    childProcess.execFile = originalExecFile;
+    syncBuiltinESMExports();
+    process.stdout.write = originalWrite;
+
+    if (originalMode === undefined) delete process.env.PI_SUPERWHISPER_PASTE;
+    else process.env.PI_SUPERWHISPER_PASTE = originalMode;
+
+    if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+    else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+    if (originalTemp === undefined) delete process.env.TEMP;
+    else process.env.TEMP = originalTemp;
+
+    await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
+    await rm(isolatedTempDir, { recursive: true, force: true });
+  }
+});
