@@ -77,7 +77,10 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalTemp = process.env.TEMP;
   const tempModules = [];
+  const isolatedTempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-perf-state-"));
+  let shutdownSession;
 
   const commands = [];
   const execFileMock = (_file, args, _options, callback) => {
@@ -112,6 +115,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
   process.stdout.write = () => true;
   process.env.PI_SUPERWHISPER_PASTE = "on";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
+  process.env.TEMP = isolatedTempDir;
 
   try {
     globalThis.__clipboardCommandBuildCount = 0;
@@ -123,6 +127,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
     const harness = createPiHarness();
     superwhisperPaste(harness.pi);
+    shutdownSession = harness.handler("session_shutdown");
 
     const ctx = {
       hasUI: true,
@@ -140,9 +145,11 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
     };
 
     await harness.handler("session_start")({}, ctx);
+    const startupReadCount = commands.length;
     await new Promise((resolve) => setTimeout(resolve, 90));
-    await harness.handler("session_shutdown")();
+    await shutdownSession();
 
+    assert.equal(startupReadCount, 1, "session startup should perform one clipboard read");
     assert.ok(commands.length >= 2, "expected multiple clipboard reads during polling");
     assert.equal(
       globalThis.__clipboardCommandBuildCount,
@@ -150,6 +157,7 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
       "clipboard poll should build the PowerShell command only once",
     );
   } finally {
+    shutdownSession?.();
     childProcess.execFile = originalExecFile;
     syncBuiltinESMExports();
     process.stdout.write = originalWrite;
@@ -159,7 +167,149 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
     if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
     else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+    if (originalTemp === undefined) delete process.env.TEMP;
+    else process.env.TEMP = originalTemp;
 
     await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
+    await rm(isolatedTempDir, { recursive: true, force: true });
+  }
+});
+
+test("regression: clipboard read failures preserve the baseline before any paste", async () => {
+  const originalExecFile = childProcess.execFile;
+  const originalWrite = process.stdout.write;
+  const originalMode = process.env.PI_SUPERWHISPER_PASTE;
+  const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalTemp = process.env.TEMP;
+  const isolatedTempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-baseline-state-"));
+  const tempModules = [];
+  let shutdownSession;
+  let terminalInputHandler;
+  let failedReads = 2;
+  let failNextRead = false;
+  let resolveFocusReadFailure;
+  const focusReadFailure = new Promise((resolve) => {
+    resolveFocusReadFailure = resolve;
+  });
+  let clipboardText = "existing clipboard text";
+  const pasted = [];
+
+  const readResult = () => {
+    if (failNextRead) {
+      failNextRead = false;
+      resolveFocusReadFailure();
+      return { error: new Error("PowerShell clipboard read failed") };
+    }
+    if (failedReads > 0) {
+      failedReads -= 1;
+      return { error: new Error("PowerShell clipboard read failed") };
+    }
+    return {
+      stdout: JSON.stringify({
+        text: clipboardText,
+        ownerProcessName: "Superwhisper",
+        ownerProcessPath: "C:\\Program Files\\Superwhisper\\Superwhisper.exe",
+      }),
+    };
+  };
+  const execFileMock = (_file, _args, _options, callback) => {
+    const result = readResult();
+    queueMicrotask(() => callback(result.error ?? null, result.stdout ?? "", ""));
+    return { kill() {} };
+  };
+  execFileMock[promisify.custom] = async () => {
+    const result = readResult();
+    if (result.error) throw result.error;
+    return { stdout: result.stdout, stderr: "" };
+  };
+
+  childProcess.execFile = execFileMock;
+  syncBuiltinESMExports();
+  process.stdout.write = () => true;
+  process.env.PI_SUPERWHISPER_PASTE = "on";
+  process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "15";
+  process.env.TEMP = isolatedTempDir;
+
+  try {
+    const imported = await importExtensionFromTypeScript();
+    tempModules.push(imported);
+    const harness = createPiHarness();
+    imported.module.default(harness.pi);
+    shutdownSession = harness.handler("session_shutdown");
+
+    const ctx = {
+      hasUI: true,
+      ui: {
+        setStatus() {},
+        notify() {},
+        onTerminalInput(handler) {
+          terminalInputHandler = handler;
+          return () => {};
+        },
+        pasteToEditor(text) {
+          pasted.push(text);
+        },
+        getEditorText() {
+          return pasted.join("");
+        },
+      },
+    };
+
+    await harness.handler("session_start")({}, ctx);
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(pasted, [], "the first successful poll must seed, not paste, existing text");
+
+    clipboardText = "new clipboard content";
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(pasted, ["new clipboard content"], "later clipboard changes should paste");
+
+    shutdownSession();
+    shutdownSession = undefined;
+    failedReads = 2;
+    clipboardText = "text already present before arming";
+    await harness.handler("input")({ text: "/sw-paste:on" }, ctx);
+    shutdownSession = harness.handler("session_shutdown");
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(
+      pasted,
+      ["new clipboard content"],
+      "the first successful poll after a failed arm read must not paste existing text",
+    );
+
+    clipboardText = "new clipboard content after arming";
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(pasted, ["new clipboard content", "new clipboard content after arming"]);
+
+    failNextRead = true;
+    terminalInputHandler("\x1b[I");
+    await focusReadFailure;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    clipboardText = "new clipboard content after failed focus refresh";
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    assert.deepEqual(
+      pasted,
+      [
+        "new clipboard content",
+        "new clipboard content after arming",
+        "new clipboard content after failed focus refresh",
+      ],
+      "a failed focus refresh must preserve the established baseline so later changes paste",
+    );
+  } finally {
+    shutdownSession?.();
+    childProcess.execFile = originalExecFile;
+    syncBuiltinESMExports();
+    process.stdout.write = originalWrite;
+
+    if (originalMode === undefined) delete process.env.PI_SUPERWHISPER_PASTE;
+    else process.env.PI_SUPERWHISPER_PASTE = originalMode;
+
+    if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+    else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+    if (originalTemp === undefined) delete process.env.TEMP;
+    else process.env.TEMP = originalTemp;
+
+    await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
+    await rm(isolatedTempDir, { recursive: true, force: true });
   }
 });
