@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.1.26";
+const EXTENSION_VERSION = "0.1.27";
 
 const STATUS_KEY = "superwhisper-paste";
 const DEFAULT_INTERVAL_MS = 800;
@@ -205,24 +205,41 @@ function isCurrentSession(ctx: PiRuntimeContext, generation: number): boolean {
 }
 
 /** Runs a UI callback only for the current session; swallows stale-ctx errors. */
+function withCurrentUi<T>(
+  ctx: PiRuntimeContext,
+  generation: number,
+  action: (ui: PiEditorUi) => T,
+  fallback: T,
+): T {
+  if (!isCurrentSession(ctx, generation)) return fallback;
+
+  try {
+    const ui = ctx.ui;
+    if (!isCurrentSession(ctx, generation)) return fallback;
+    return action(ui);
+  } catch {
+    // A Pi ctx can become stale between any callback/await boundary. Treat UI
+    // failures as a closed session so the extension never bubbles the runner's
+    // stale-ctx guard up as an uncaughtException.
+    return fallback;
+  }
+}
+
+/** Runs a UI callback and reports whether it completed for the current session. */
 function safeWithCurrentUi(
   ctx: PiRuntimeContext,
   generation: number,
   action: (ui: PiEditorUi) => void,
 ): boolean {
-  if (!isCurrentSession(ctx, generation)) return false;
-
-  try {
-    const ui = ctx.ui;
-    if (!isCurrentSession(ctx, generation)) return false;
-    action(ui);
-    return true;
-  } catch {
-    // A Pi ctx can become stale between any callback/await boundary. Treat UI
-    // failures as a closed session so the extension never bubbles the runner's
-    // stale-ctx guard up as an uncaughtException.
-    return false;
-  }
+  return withCurrentUi(
+    ctx,
+    generation,
+    (ui) => {
+      action(ui);
+      return true;
+    },
+    false,
+  );
 }
 
 /** Updates Pi status bar when session is current. */
@@ -253,15 +270,12 @@ function pasteToEditor(ctx: PiRuntimeContext, generation: number, text: string):
 
 /** Reads editor text when session is current. */
 function getEditorText(ctx: PiRuntimeContext, generation: number): string | undefined {
-  if (!isCurrentSession(ctx, generation)) return undefined;
-
-  try {
-    const ui = ctx.ui;
-    if (!isCurrentSession(ctx, generation)) return undefined;
-    return String(ui.getEditorText?.() ?? "");
-  } catch {
-    return undefined;
-  }
+  return withCurrentUi(
+    ctx,
+    generation,
+    (ui) => String(ui.getEditorText?.() ?? ""),
+    undefined,
+  );
 }
 
 /** Records last paste and refreshes status after insert. */
