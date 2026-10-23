@@ -53,14 +53,18 @@ function createRuntimeContext() {
   let stale = false;
   let terminalInputHandler;
   let unsubscribeCalled = false;
+  const statusUpdates = [];
+  const pastedTexts = [];
+  let editorReadCount = 0;
 
   const assertFresh = () => {
     if (stale) throw new Error("Pi rejected a stale extension ctx");
   };
 
   const ui = {
-    setStatus() {
+    setStatus(key, value) {
       assertFresh();
+      statusUpdates.push([key, value]);
     },
     notify() {
       assertFresh();
@@ -72,11 +76,13 @@ function createRuntimeContext() {
         unsubscribeCalled = true;
       };
     },
-    pasteToEditor() {
+    pasteToEditor(text) {
       assertFresh();
+      pastedTexts.push(text);
     },
     getEditorText() {
       assertFresh();
+      editorReadCount++;
       return "";
     },
   };
@@ -98,6 +104,11 @@ function createRuntimeContext() {
     },
     get unsubscribeCalled() {
       return unsubscribeCalled;
+    },
+    statusUpdates,
+    pastedTexts,
+    get editorReadCount() {
+      return editorReadCount;
     },
   };
 }
@@ -160,6 +171,77 @@ test("regression: stale session callbacks do not bubble Pi's stale-ctx guard", a
     assert.equal(runtime.unsubscribeCalled, true);
 
     assert.doesNotThrow(() => runtime.terminalInput("\x1b[O"));
+  } finally {
+    childProcess.execFile = originalExecFile;
+    syncBuiltinESMExports();
+    process.stdout.write = originalWrite;
+
+    if (originalMode === undefined) delete process.env.PI_SUPERWHISPER_PASTE;
+    else process.env.PI_SUPERWHISPER_PASTE = originalMode;
+
+    if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+    else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+
+    await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
+  }
+});
+
+test("regression: current session UI access reads the editor before pasting", async () => {
+  const originalExecFile = childProcess.execFile;
+  const originalWrite = process.stdout.write;
+  const originalMode = process.env.PI_SUPERWHISPER_PASTE;
+  const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const tempModules = [];
+  const clipboardSnapshots = ["clipboard baseline", "clipboard baseline", "dictated text"];
+  let clipboardReadCount = 0;
+
+  const execFileMock = (_file, _args, _options, callback) => {
+    const text = clipboardSnapshots[Math.min(clipboardReadCount++, clipboardSnapshots.length - 1)];
+    queueMicrotask(() =>
+      callback(
+        null,
+        JSON.stringify({
+          text,
+          ownerProcessName: "Superwhisper",
+          ownerProcessPath: "C:\\Program Files\\Superwhisper\\Superwhisper.exe",
+        }),
+        "",
+      ),
+    );
+    return { kill() {} };
+  };
+  execFileMock[promisify.custom] = async () => {
+    const text = clipboardSnapshots[Math.min(clipboardReadCount++, clipboardSnapshots.length - 1)];
+    return {
+      stdout: JSON.stringify({
+        text,
+        ownerProcessName: "Superwhisper",
+        ownerProcessPath: "C:\\Program Files\\Superwhisper\\Superwhisper.exe",
+      }),
+      stderr: "",
+    };
+  };
+
+  childProcess.execFile = execFileMock;
+  syncBuiltinESMExports();
+  process.stdout.write = () => true;
+  process.env.PI_SUPERWHISPER_PASTE = "on";
+  process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "10";
+
+  try {
+    const imported = await importExtensionFromTypeScript();
+    tempModules.push(imported);
+    const harness = createPiHarness();
+    imported.module.default(harness.pi);
+
+    const runtime = createRuntimeContext();
+    await harness.handler("session_start")({}, runtime.ctx);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await harness.handler("session_shutdown")();
+
+    assert.ok(runtime.statusUpdates.some(([key]) => key === "superwhisper-paste"));
+    assert.ok(runtime.editorReadCount > 0, "expected to inspect the current editor contents");
+    assert.deepEqual(runtime.pastedTexts, ["dictated text"]);
   } finally {
     childProcess.execFile = originalExecFile;
     syncBuiltinESMExports();
