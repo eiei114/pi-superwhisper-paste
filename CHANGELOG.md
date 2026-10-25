@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.1.27] - 2026-10-24
+
+### Changed
+
+- Consolidate guarded Pi UI access for callbacks and editor reads.
+
 ## [0.1.26] - 2026-10-16
 
 ### Changed
