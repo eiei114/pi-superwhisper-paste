@@ -26,18 +26,44 @@ Run these commands inside Pi's input box:
 | Variable | Default | Purpose |
 |---|---:|---|
 | `PI_SUPERWHISPER_PASTE` | `on` | Set to `off`, `0`, `false`, or `no` to disable by default. |
+| `PI_SUPERWHISPER_PASTE_SOURCE` | `auto` | Where transcriptions come from: `auto`, `clipboard`, or `recording`. `auto` uses `recording` when Superwhisper's recordings folder exists, else `clipboard`. |
+| `PI_SUPERWHISPER_PASTE_RECORDINGS_DIR` | `%LOCALAPPDATA%\com.superwhisper.app\recordings` | Recordings folder read by the `recording` source. |
 | `PI_SUPERWHISPER_PASTE_INTERVAL_MS` | `800` | Clipboard polling interval. |
-| `PI_SUPERWHISPER_PASTE_MAX_CHARS` | `8000` | Maximum clipboard text length to paste. |
+| `PI_SUPERWHISPER_PASTE_MAX_CHARS` | `8000` | Maximum clipboard or recording text length to paste. |
 | `PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS` | `1500` | Ignore clipboard changes briefly after local terminal copy shortcuts. |
 | `PI_SUPERWHISPER_PASTE_OWNER_DENYLIST` | `windowsterminal, windows terminal, openconsole, wezterm, alacritty, mintty, conhost, cmd.exe, code, powershell, pwsh, bash, cursor, wsl (and .exe variants)` | Comma-separated clipboard owner process/path substrings blocked from auto-paste. |
+| `PI_SUPERWHISPER_PASTE_DEBUG` | unset | Emit source diagnostics through `process.emitWarning`. Never writes to stdout/stderr, which would corrupt the TUI. |
+| `PI_SUPERWHISPER_HERDR_BIN` | `%LOCALAPPDATA%\Programs\herdr-app\herdr-app.exe` | Herdr CLI used to read which pane is focused when the `recording` source runs under Herdr. |
+
+## Sources
+
+The bridge can read transcriptions two ways. `PI_SUPERWHISPER_PASTE_SOURCE` selects one;
+`auto` (the default) prefers `recording` and falls back to `clipboard`.
+
+**`clipboard`** — the original behaviour. Polls the Windows clipboard and pastes new text
+whose owner is not a terminal process.
+
+**`recording`** — reads the files Superwhisper writes itself, at
+`%LOCALAPPDATA%\com.superwhisper.app\recordings\<id>\meta.json`. Use it when Superwhisper's
+own paste reaches ordinary apps but not your terminal.
+
+Superwhisper pastes through Windows UI Automation to find an editable target. Herdr's GPUI
+window (`Zed::Window`) exposes an empty automation tree — no children, no focused element — so
+Superwhisper finds nothing to paste into and drops the transcription, even though its key
+injection works fine. Reading the recording file sidesteps the clipboard and UI Automation
+entirely.
+
+Recording ids are timestamps, so ids present when the watcher starts are treated as history and
+never replayed. Only the session holding focus receives the text: under Herdr the focused pane
+is compared against `HC_TERMINAL_ID`, so a dictation does not land in every open session.
 
 ## Expected workflow
 
 1. Start Pi with this extension installed or loaded.
 2. Keep the Pi input box focused.
 3. Dictate with Superwhisper.
-4. Superwhisper writes the transcript to the clipboard.
-5. The extension inserts the new clipboard text into the Pi editor.
+4. Superwhisper writes the transcript to the clipboard (or to its recordings folder).
+5. The extension inserts the new text into the Pi editor.
 
 When multiple Pi tabs are open, only the tab that most recently had terminal focus or keyboard input should paste the new clipboard text.
 

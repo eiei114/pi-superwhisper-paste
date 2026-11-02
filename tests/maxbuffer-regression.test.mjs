@@ -8,20 +8,12 @@ import { stripTypeScriptTypes, syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { promisify } from "node:util";
 
+import { loadExtensionModule } from "./helpers/load-extension.mjs";
+
 const extensionUrl = new URL("../extensions/index.ts", import.meta.url);
 
 async function importExtensionFromTypeScript() {
-  const source = await readFile(extensionUrl, "utf8");
-  const compiled = stripTypeScriptTypes(source, { mode: "strip" });
-
-  const tempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-maxbuffer-"));
-  const modulePath = join(tempDir, "extension.mjs");
-  await writeFile(modulePath, compiled, "utf8");
-
-  return {
-    module: await import(`${pathToFileURL(modulePath).href}?t=${Date.now()}`),
-    cleanup: () => rm(tempDir, { recursive: true, force: true }),
-  };
+  return loadExtensionModule({ prefix: "pi-superwhisper-paste-maxbuffer" });
 }
 
 function createPiHarness() {
@@ -62,6 +54,9 @@ test("regression: oversized clipboard stdout does not break session_start", asyn
   syncBuiltinESMExports();
   process.stdout.write = () => true;
   process.env.PI_SUPERWHISPER_PASTE = "on";
+  // These cases assert clipboard behaviour specifically, so pin the source
+  // rather than letting `auto` prefer the recordings path on this machine.
+  process.env.PI_SUPERWHISPER_PASTE_SOURCE = "clipboard";
 
   try {
     const imported = await importExtensionFromTypeScript();
@@ -107,6 +102,7 @@ test("regression: malformed clipboard JSON does not stop startup or later pollin
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalSource = process.env.PI_SUPERWHISPER_PASTE_SOURCE;
   const originalTemp = new Map(["TMP", "TEMP", "TMPDIR"].map((key) => [key, process.env[key]]));
   const tempModules = [];
   const tempRoot = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-malformed-"));
@@ -141,6 +137,9 @@ test("regression: malformed clipboard JSON does not stop startup or later pollin
   syncBuiltinESMExports();
   process.stdout.write = () => true;
   process.env.PI_SUPERWHISPER_PASTE = "on";
+  // These cases assert clipboard behaviour specifically, so pin the source
+  // rather than letting `auto` prefer the recordings path on this machine.
+  process.env.PI_SUPERWHISPER_PASTE_SOURCE = "clipboard";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "20";
   process.env.TMP = tempRoot;
   process.env.TEMP = tempRoot;
@@ -195,6 +194,9 @@ test("regression: malformed clipboard JSON does not stop startup or later pollin
 
       if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
       else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+
+      if (originalSource === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+      else process.env.PI_SUPERWHISPER_PASTE_SOURCE = originalSource;
 
       for (const [key, value] of originalTemp) {
         if (value === undefined) delete process.env[key];
