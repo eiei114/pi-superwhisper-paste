@@ -8,6 +8,8 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
+import { loadExtensionModule } from "./helpers/load-extension.mjs";
+
 const extensionUrl = new URL("../extensions/index.ts", import.meta.url);
 const extensionSource = await readFile(extensionUrl, "utf8");
 
@@ -19,17 +21,14 @@ function instrumentExtensionSource(source) {
 }
 
 async function importExtensionFromTypeScript(sourceOverride) {
-  const source = sourceOverride ?? (await readFile(extensionUrl, "utf8"));
-  const compiled = stripTypeScriptTypes(source, { mode: "strip" });
-
-  const tempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-perf-"));
-  const modulePath = join(tempDir, "extension.mjs");
-  await writeFile(modulePath, compiled, "utf8");
-
-  return {
-    module: await import(`${pathToFileURL(modulePath).href}?t=${Date.now()}`),
-    cleanup: () => rm(tempDir, { recursive: true, force: true }),
-  };
+  // The extension imports sibling modules, so the helper copies the whole
+  // folder and only rewrites the entry point when a source override is given.
+  return loadExtensionModule({
+    prefix: "pi-superwhisper-paste-perf",
+    transform: sourceOverride
+      ? (source, name) => (name === "index.ts" ? sourceOverride : source)
+      : undefined,
+  });
 }
 
 function createPiHarness() {
@@ -109,7 +108,10 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
 

@@ -8,20 +8,12 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
+import { loadExtensionModule } from "./helpers/load-extension.mjs";
+
 const extensionUrl = new URL("../extensions/index.ts", import.meta.url);
 
 async function importExtensionFromTypeScript() {
-  const source = await readFile(extensionUrl, "utf8");
-  const compiled = stripTypeScriptTypes(source, { mode: "strip" });
-
-  const tempDir = await mkdtemp(join(tmpdir(), "pi-superwhisper-paste-copy-"));
-  const modulePath = join(tempDir, "extension.mjs");
-  await writeFile(modulePath, compiled, "utf8");
-
-  return {
-    module: await import(`${pathToFileURL(modulePath).href}?t=${Date.now()}`),
-    cleanup: () => rm(tempDir, { recursive: true, force: true }),
-  };
+  return loadExtensionModule({ prefix: "pi-superwhisper-paste-copy" });
 }
 
 function createPiHarness() {
@@ -78,6 +70,7 @@ test("regression: local terminal copy does not auto-paste into Pi", async () => 
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalSource = process.env.PI_SUPERWHISPER_PASTE_SOURCE;
   const originalIgnoreCopy = process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS;
   const tempModules = [];
 
@@ -99,8 +92,14 @@ test("regression: local terminal copy does not auto-paste into Pi", async () => 
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
+  // These cases assert clipboard behaviour specifically, so pin the source
+  // rather than letting `auto` prefer the recordings path on this machine.
+  process.env.PI_SUPERWHISPER_PASTE_SOURCE = "clipboard";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
   process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS = "80";
 
@@ -154,6 +153,9 @@ test("regression: local terminal copy does not auto-paste into Pi", async () => 
     if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
     else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
 
+    if (originalSource === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    else process.env.PI_SUPERWHISPER_PASTE_SOURCE = originalSource;
+
     if (originalIgnoreCopy === undefined) delete process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS;
     else process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS = originalIgnoreCopy;
 
@@ -166,6 +168,7 @@ test("regression: Code host owner is blocked by terminal denylist", async () => 
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalSource = process.env.PI_SUPERWHISPER_PASTE_SOURCE;
   const tempModules = [];
 
   let clipboardSnapshot = {
@@ -186,8 +189,14 @@ test("regression: Code host owner is blocked by terminal denylist", async () => 
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
+  // These cases assert clipboard behaviour specifically, so pin the source
+  // rather than letting `auto` prefer the recordings path on this machine.
+  process.env.PI_SUPERWHISPER_PASTE_SOURCE = "clipboard";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
 
   try {
@@ -222,6 +231,9 @@ test("regression: Code host owner is blocked by terminal denylist", async () => 
     if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
     else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
 
+    if (originalSource === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    else process.env.PI_SUPERWHISPER_PASTE_SOURCE = originalSource;
+
     await Promise.all(tempModules.map(({ cleanup }) => cleanup()));
   }
 });
@@ -231,6 +243,7 @@ test("regression: local copy shortcuts suppress the next auto-paste", async () =
   const originalWrite = process.stdout.write;
   const originalMode = process.env.PI_SUPERWHISPER_PASTE;
   const originalInterval = process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+  const originalSource = process.env.PI_SUPERWHISPER_PASTE_SOURCE;
   const originalIgnoreCopy = process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS;
   const tempModules = [];
 
@@ -252,8 +265,14 @@ test("regression: local copy shortcuts suppress the next auto-paste", async () =
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
+  // These cases assert clipboard behaviour specifically, so pin the source
+  // rather than letting `auto` prefer the recordings path on this machine.
+  process.env.PI_SUPERWHISPER_PASTE_SOURCE = "clipboard";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
   // Keep the suppression window well above the polling interval so the observed
   // result reflects the shortcut lookup rather than timer jitter.
@@ -317,6 +336,9 @@ test("regression: local copy shortcuts suppress the next auto-paste", async () =
 
     if (originalInterval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
     else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalInterval;
+
+    if (originalSource === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    else process.env.PI_SUPERWHISPER_PASTE_SOURCE = originalSource;
 
     if (originalIgnoreCopy === undefined) delete process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS;
     else process.env.PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS = originalIgnoreCopy;

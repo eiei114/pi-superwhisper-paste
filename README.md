@@ -25,9 +25,25 @@ The official Superwhisper Pi package (`@superwhisper/pi`) targets the deeplink/m
 
 - Default-on after the extension loads on Windows.
 - Slash commands: `/sw-paste:on` and `/sw-paste:off`.
+- Two transcription sources: clipboard polling (original) and Superwhisper's own recording files.
 - Windows clipboard polling with active-tab gating.
 - Brief copy-suppression window so local terminal copy actions do not get auto-pasted back into Pi.
 - Clipboard-owner filtering so terminal/CLI-owned clipboard updates stay blocked by default.
+- Focus gating, so a dictation lands only in the focused Pi session.
+
+## When the clipboard path is not enough
+
+Superwhisper pastes through Windows UI Automation to find an editable target. Some terminal
+hosts expose no automation tree at all — Herdr's GPUI window (`Zed::Window`) reports zero
+children and no focused element — so Superwhisper finds nothing to paste into and drops the
+transcription, even though its key injection works fine.
+
+The `recording` source handles that case: Superwhisper writes every transcription to
+`%LOCALAPPDATA%\com.superwhisper.app\recordings\<id>\meta.json` before it tries to paste, so
+reading the file needs neither the clipboard nor UI Automation.
+
+`PI_SUPERWHISPER_PASTE_SOURCE=auto` (the default) uses `recording` when that folder exists and
+falls back to `clipboard`. Force one with `clipboard` or `recording`. See `docs/examples.md`.
 
 ## Install
 
@@ -40,7 +56,7 @@ pi install npm:pi-superwhisper-paste
 Pin a specific version when you want reproducible installs:
 
 ```bash
-pi install npm:pi-superwhisper-paste@0.1.27
+pi install npm:pi-superwhisper-paste@0.2.0
 ```
 
 Install into the current project instead of your user Pi settings:
@@ -73,7 +89,7 @@ Docs: https://superwhisper.com/pi
 
 ## Quick start
 
-After install, start Pi and dictate with Superwhisper. New Superwhisper clipboard output should auto-paste into the active Pi editor when the bridge is on.
+After install, start Pi and dictate with Superwhisper. With the default `PI_SUPERWHISPER_PASTE_SOURCE=auto`, the bridge reads each new transcription from Superwhisper's recordings folder when it exists, and otherwise auto-pastes new Superwhisper clipboard output into the active Pi editor. Set `PI_SUPERWHISPER_PASTE_SOURCE=clipboard` to keep the clipboard workflow even when the recordings folder exists.
 
 Toggle the bridge at runtime:
 

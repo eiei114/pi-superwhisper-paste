@@ -1,7 +1,7 @@
 {
   "name": "pi-superwhisper-paste",
-  "version": "0.1.27",
-  "description": "Superwhisper clipboard bridge for Pi on Windows.",
+  "version": "0.2.0",
+  "description": "Superwhisper bridge for Pi on Windows: clipboard and recording-file sources.",
   "type": "module",
   "license": "MIT",
   "author": "Keisu",
@@ -35,7 +35,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "ci": "npm run typecheck && npm test && npm run smoke:pi && npm run pack:check",
     "pack:check": "npm pack --dry-run",
     "smoke:pi": "node scripts/pi-sdk-smoke.mjs",

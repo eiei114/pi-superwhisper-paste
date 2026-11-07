@@ -1,14 +1,17 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { createRecordingSource, recordingsDirAvailable } from "./recording-source.ts";
+import type { RecordingSource } from "./recording-source.ts";
 
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.1.27";
+const EXTENSION_VERSION = "0.2.0";
 
 const STATUS_KEY = "superwhisper-paste";
+const DEFAULT_SOURCE = "auto";
 const DEFAULT_INTERVAL_MS = 800;
 const DEFAULT_MAX_CHARS = 8000;
 const DEFAULT_IGNORE_COPY_MS = 1500;
@@ -35,6 +38,15 @@ const DEFAULT_OWNER_DENYLIST = [
 ];
 const ACTIVE_STATE_FILE = "pi-superwhisper-paste-active.json";
 const ACTIVE_STATE_PATH = join(tmpdir(), ACTIVE_STATE_FILE);
+/** Herdr's CLI, used to read which pane is focused when Herdr hosts this pane. */
+const HERDR_APP_BIN =
+  process.env.PI_SUPERWHISPER_HERDR_BIN ??
+  join(
+    process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
+    "Programs",
+    "herdr-app",
+    "herdr-app.exe",
+  );
 const FOCUS_IN = "\x1b[I";
 const FOCUS_OUT = "\x1b[O";
 const ENABLE_FOCUS_REPORTING = "\x1b[?1004h";
@@ -54,6 +66,17 @@ const LOCAL_COPY_SHORTCUTS = new Set([
 ]);
 
 type BridgeMode = "off" | "on";
+
+/**
+ * Where transcriptions come from.
+ *
+ * - `clipboard`: poll the Windows clipboard, the original behaviour.
+ * - `recording`: read Superwhisper's own recording files. Works where the
+ *   clipboard paste cannot reach the app, such as Herdr's GPUI window, whose
+ *   UI Automation tree is empty so Superwhisper's paste finds no target.
+ * - `auto`: pick `recording` when the recordings folder exists, else clipboard.
+ */
+type BridgeSource = "clipboard" | "recording" | "auto";
 
 type ClipboardSnapshot = {
   text?: string;
@@ -96,6 +119,10 @@ type BridgeState = {
   lastPasted?: string;
   lastPasteSummary?: string;
   activeTabCache?: { ok: boolean; checkedAt: number };
+  recordingSource?: RecordingSource;
+  recordingGeneration?: number;
+  /** Serializes recording deliveries so two pastes cannot interleave. */
+  recordingDelivery?: Promise<void>;
 };
 
 let cachedOwnerDenylistEnv: string | undefined;
@@ -120,6 +147,26 @@ const state: BridgeState = {
 function defaultMode(): BridgeMode {
   const raw = (process.env.PI_SUPERWHISPER_PASTE ?? "on").trim().toLowerCase();
   return ["0", "false", "no", "off"].includes(raw) ? "off" : "on";
+}
+
+/** Resolves the transcription source from `PI_SUPERWHISPER_PASTE_SOURCE`. */
+function configuredSource(): BridgeSource {
+  const raw = (process.env.PI_SUPERWHISPER_PASTE_SOURCE ?? DEFAULT_SOURCE).trim().toLowerCase();
+  if (raw === "clipboard" || raw === "recording") return raw;
+  return "auto";
+}
+
+/**
+ * The source actually in use right now.
+ *
+ * `auto` prefers recording files because that path works whether or not the
+ * focused app accepts a patched paste, and falls back to the clipboard when
+ * Superwhisper's recordings are not present on this machine.
+ */
+function activeSource(): "clipboard" | "recording" {
+  const configured = configuredSource();
+  if (configured !== "auto") return configured;
+  return recordingsDirAvailable(recordingsDir()) ? "recording" : "clipboard";
 }
 
 /** Cached poll/copy limits parsed from env (hot path on every interval tick). */
@@ -158,6 +205,17 @@ function ignoreCopyMs(): number {
   return runtimeConfig().ignoreCopyMs;
 }
 
+/** Superwhisper's recordings folder, overridable for tests and odd installs. */
+function recordingsDir(): string {
+  const override = process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR?.trim();
+  if (override) return override;
+  const localAppData = process.env.LOCALAPPDATA;
+  const base = localAppData && localAppData.length > 0
+    ? localAppData
+    : join(homedir(), "AppData", "Local");
+  return join(base, "com.superwhisper.app", "recordings");
+}
+
 /** Process-name/path substrings denied from triggering auto-paste. */
 function ownerDenylist(): readonly string[] {
   const raw = process.env.PI_SUPERWHISPER_PASTE_OWNER_DENYLIST ?? "";
@@ -182,9 +240,10 @@ function ownerDenylist(): readonly string[] {
 function statusText(): string | undefined {
   if (state.mode === "off") return undefined;
   const focusText = state.terminalFocused ? "active" : "standby";
+  const sourceText = activeSource();
   return state.lastPasteSummary
-    ? `SW paste v${EXTENSION_VERSION}: ${focusText} (${state.lastPasteSummary})`
-    : `SW paste v${EXTENSION_VERSION}: ${focusText}`;
+    ? `SW paste v${EXTENSION_VERSION}: ${sourceText} ${focusText} (${state.lastPasteSummary})`
+    : `SW paste v${EXTENSION_VERSION}: ${sourceText} ${focusText}`;
 }
 
 /** Short display name for clipboard owner debugging. */
@@ -285,6 +344,137 @@ function markPasted(ctx: PiRuntimeContext, generation: number, text: string): vo
   state.lastPasteSummary = `${text.length} chars`;
   // pasteToEditor mutates the editor directly; setStatus nudges Pi to redraw.
   setStatus(ctx, generation);
+}
+
+/**
+ * Whether Herdr currently shows this terminal as the focused agent.
+ *
+ * `herdr-app status` reports the focused pane's terminal address (`agent`), so
+ * comparing it with the terminal this process runs in is a direct focus check.
+ * Reading focus from Herdr rather than from terminal focus reporting matters
+ * here: Herdr keeps several agent panes alive at once, and every one of them
+ * watching the same recordings folder is exactly the bug this gate prevents.
+ *
+ * Returns undefined when Herdr is not the host, so callers can fall back.
+ */
+async function herdrFocusVerdict(): Promise<boolean | undefined> {
+  const terminalId = process.env.HC_TERMINAL_ID?.trim();
+  if (!terminalId) return undefined;
+
+  try {
+    const result = await execFileAsync(HERDR_APP_BIN, ["status"], {
+      encoding: "utf8",
+      timeout: 2_000,
+      windowsHide: true,
+    });
+    const stdout = typeof result.stdout === "string" ? result.stdout : "";
+    if (!stdout.trim()) return undefined;
+
+    const status = JSON.parse(stdout) as { agent?: unknown; focused_pane?: unknown };
+    const focusedTerminal = typeof status.agent === "string" ? status.agent : undefined;
+    if (!focusedTerminal) return undefined;
+    return focusedTerminal === terminalId;
+  } catch {
+    // Herdr not installed, not running, or the call timed out.
+    return undefined;
+  }
+}
+
+/**
+ * Decides whether this session may receive a transcription right now.
+ *
+ * Every Pi session watches the same recordings folder, so without a gate a
+ * single dictation lands in every open session. Under Herdr the focused pane
+ * decides; elsewhere the clipboard path's terminal-focus and active-tab claim
+ * are used.
+ */
+async function canReceiveRecording(): Promise<boolean> {
+  const herdr = await herdrFocusVerdict();
+  if (herdr !== undefined) return herdr;
+
+  if (!state.terminalFocused) return false;
+  return isActiveTab();
+}
+
+/**
+ * Delivers one transcription read from Superwhisper's recordings.
+ *
+ * Unlike the clipboard path there is no owner gate to apply: the text came from
+ * a recording this machine just made, so it is always ours to paste. Focus and
+ * active-tab gating still apply, because several Pi sessions share one
+ * recordings folder.
+ */
+async function deliverRecordingText(
+  ctx: PiRuntimeContext,
+  generation: number,
+  text: string,
+): Promise<void> {
+  if (!isCurrentSession(ctx, generation)) return;
+  if (state.mode === "off") return;
+
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return;
+  if (trimmed.length > maxChars()) return;
+  // No same-text guard here: the recording source already delivers each
+  // recording id once, and dictating the same words twice is a real repeat.
+
+  if (!(await canReceiveRecording())) {
+    state.lastPasteSummary = "skipped (not focused)";
+    setStatus(ctx, generation);
+    return;
+  }
+  if (!isCurrentSession(ctx, generation)) return;
+
+  if (!pasteToEditor(ctx, generation, trimmed)) return;
+  markPasted(ctx, generation, trimmed);
+  state.lastPasteSummary = `${trimmed.length} chars via recording`;
+  setStatus(ctx, generation);
+}
+
+/** Starts the recordings watcher for the current session. */
+function ensureRecordingSource(ctx: PiRuntimeContext, generation: number): void {
+  if (!isCurrentSession(ctx, generation)) return;
+  if (state.recordingSource?.isRunning() && state.recordingGeneration === generation) return;
+
+  state.recordingSource?.stop();
+
+  const source = createRecordingSource({
+    dir: recordingsDir(),
+    maxChars,
+    onText: (text) => {
+      // The source is synchronous, but focus gating reads the shared claim file.
+      // Serialize deliveries so two recordings cannot interleave pastes.
+      state.recordingDelivery = (state.recordingDelivery ?? Promise.resolve())
+        .then(() => deliverRecordingText(ctx, generation, text))
+        .catch(() => {
+          // A stale session or a closed editor must not break the watcher.
+        });
+    },
+    log: (level, message) => {
+      // Never write to stdout/stderr: Pi owns the terminal and raw text there
+      // lands on top of the TUI and shreds the layout.
+      if (process.env.PI_SUPERWHISPER_PASTE_DEBUG) {
+        try {
+          process.emitWarning(`[superwhisper-paste] ${level}: ${message}`);
+        } catch {
+          // Diagnostics are best-effort.
+        }
+      }
+    },
+  });
+
+  source.start();
+  if (!source.isRunning()) return;
+
+  state.recordingSource = source;
+  state.recordingGeneration = generation;
+}
+
+/** Stops the recordings watcher. */
+function stopRecordingSource(): void {
+  state.recordingSource?.stop();
+  state.recordingSource = undefined;
+  state.recordingGeneration = undefined;
 }
 
 /** Returns a cached PowerShell clipboard script for the current char limit. */
@@ -623,6 +813,7 @@ function teardownSessionResources(): void {
     clearTimeout(state.baselineRefreshTimeout);
     state.baselineRefreshTimeout = undefined;
   }
+  stopRecordingSource();
   teardownTerminalFocusTracking();
   invalidateActiveTabCache();
   state.inFlightGeneration = undefined;
@@ -657,6 +848,18 @@ function ensurePolling(ctx: PiRuntimeContext, generation: number): void {
   if (!isCurrentSession(ctx, generation)) return;
 
   setupTerminalFocusTracking(ctx, generation);
+
+  if (activeSource() === "recording") {
+    // No clipboard polling and no clipboard baseline: this path reads
+    // Superwhisper's own files, so a clipboard read would be pure overhead and
+    // would also re-introduce the owner gates that do not apply here.
+    state.lastPasteSummary = undefined;
+    ensureRecordingSource(ctx, generation);
+    setStatus(ctx, generation);
+    return;
+  }
+
+  stopRecordingSource();
   setStatus(ctx, generation);
 
   if (state.interval) return;
