@@ -108,7 +108,10 @@ test("regression: repeated clipboard reads reuse the cached PowerShell command",
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "25";
 

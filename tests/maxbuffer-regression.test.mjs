@@ -52,7 +52,10 @@ test("regression: oversized clipboard stdout does not break session_start", asyn
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   // These cases assert clipboard behaviour specifically, so pin the source
   // rather than letting `auto` prefer the recordings path on this machine.
@@ -135,7 +138,10 @@ test("regression: malformed clipboard JSON does not stop startup or later pollin
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   // These cases assert clipboard behaviour specifically, so pin the source
   // rather than letting `auto` prefer the recordings path on this machine.

@@ -92,7 +92,10 @@ test("regression: local terminal copy does not auto-paste into Pi", async () => 
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   // These cases assert clipboard behaviour specifically, so pin the source
   // rather than letting `auto` prefer the recordings path on this machine.
@@ -186,7 +189,10 @@ test("regression: Code host owner is blocked by terminal denylist", async () => 
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   // These cases assert clipboard behaviour specifically, so pin the source
   // rather than letting `auto` prefer the recordings path on this machine.
@@ -259,7 +265,10 @@ test("regression: local copy shortcuts suppress the next auto-paste", async () =
 
   childProcess.execFile = execFileMock;
   syncBuiltinESMExports();
-  process.stdout.write = () => true;
+  // Swallow only the extension's terminal escape writes. The node:test runner
+  // reports through this stream, and dropping its frames can hang the run.
+  process.stdout.write = (chunk, ...rest) =>
+    typeof chunk === "string" && chunk.startsWith("[") ? true : originalWrite.call(process.stdout, chunk, ...rest);
   process.env.PI_SUPERWHISPER_PASTE = "on";
   // These cases assert clipboard behaviour specifically, so pin the source
   // rather than letting `auto` prefer the recordings path on this machine.
