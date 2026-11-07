@@ -180,6 +180,76 @@ test("recording paste lands only in the Herdr-focused pane", async () => {
   }
 });
 
+test("default source stays on clipboard when a recordings folder exists", async () => {
+  const originalExecFile = childProcess.execFile;
+  const originalGlobals = {
+    terminalId: process.env.HC_TERMINAL_ID,
+    recordings: process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR,
+    source: process.env.PI_SUPERWHISPER_PASTE_SOURCE,
+    mode: process.env.PI_SUPERWHISPER_PASTE,
+    interval: process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS,
+  };
+
+  const rec = await makeRecordings();
+  const loaded = [];
+  let harness;
+  let clipboard = "baseline";
+
+  try {
+    process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR = rec.dir;
+    delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    process.env.PI_SUPERWHISPER_PASTE = "on";
+    process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "20";
+    delete process.env.HC_TERMINAL_ID;
+
+    const mockExecFile = (_file, _args, _options, callback) => {
+      queueMicrotask(() => callback(null, JSON.stringify({ text: clipboard }), ""));
+      return { kill() {} };
+    };
+    mockExecFile[promisify.custom] = async () => ({
+      stdout: JSON.stringify({ text: clipboard }),
+      stderr: "",
+    });
+    childProcess.execFile = mockExecFile;
+    syncBuiltinESMExports();
+
+    const { module, cleanup } = await loadExtensionModule({ prefix: "sw-default-source" });
+    loaded.push(cleanup);
+
+    harness = createPiHarness();
+    module.default(harness.pi);
+
+    const runtime = createRuntimeContext();
+    await harness.handler("session_start")({ reason: "startup" }, runtime.ctx);
+
+    assert.ok(
+      runtime.statuses.some(([, value]) => value?.includes("clipboard")),
+      `expected clipboard status, got ${JSON.stringify(runtime.statuses)}`,
+    );
+
+    clipboard = "clipboard dictation";
+    assert.ok(await waitFor(() => runtime.pasted.length === 1), "clipboard update was not pasted");
+    assert.deepEqual(runtime.pasted, ["clipboard dictation"]);
+  } finally {
+    if (harness) await harness.handler("session_shutdown")();
+    childProcess.execFile = originalExecFile;
+    syncBuiltinESMExports();
+    if (originalGlobals.terminalId === undefined) delete process.env.HC_TERMINAL_ID;
+    else process.env.HC_TERMINAL_ID = originalGlobals.terminalId;
+    if (originalGlobals.recordings === undefined) delete process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR;
+    else process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR = originalGlobals.recordings;
+    if (originalGlobals.source === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    else process.env.PI_SUPERWHISPER_PASTE_SOURCE = originalGlobals.source;
+    if (originalGlobals.mode === undefined) delete process.env.PI_SUPERWHISPER_PASTE;
+    else process.env.PI_SUPERWHISPER_PASTE = originalGlobals.mode;
+    if (originalGlobals.interval === undefined) delete process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS;
+    else process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = originalGlobals.interval;
+
+    for (const cleanup of loaded) await cleanup();
+    await rec.cleanup();
+  }
+});
+
 test("recording paste lands in the Herdr-focused pane", async () => {
   const originalExecFile = childProcess.execFile;
   const originalGlobals = {

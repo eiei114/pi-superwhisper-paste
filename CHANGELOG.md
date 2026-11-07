@@ -9,13 +9,19 @@ This project follows semantic versioning.
 ### Added
 
 - `recording` source: reads transcriptions from Superwhisper's own recordings folder, so dictation works in terminals whose UI Automation tree is empty (such as Herdr's GPUI window) where Superwhisper's paste finds no target.
-- `PI_SUPERWHISPER_PASTE_SOURCE` to select `auto`, `clipboard`, or `recording`; `auto` prefers recordings and falls back to the clipboard.
+- `PI_SUPERWHISPER_PASTE_SOURCE` to select `clipboard`, `recording`, or `auto`. The default is `clipboard`; `recording` opts into reading Superwhisper's recordings folder, while `auto` retains automatic selection.
 - `PI_SUPERWHISPER_PASTE_RECORDINGS_DIR` and `PI_SUPERWHISPER_HERDR_BIN` overrides.
 - Focus gating for the recording source: under Herdr the focused pane is compared against `HC_TERMINAL_ID`, so one dictation no longer lands in every open session.
 
 ### Changed
 
 - Status text now names the active source.
+
+## [0.2.1] - 2026-11-08
+
+### Fixed
+
+- Keep the original clipboard workflow as the default, even when a Superwhisper recordings folder exists; the recording-file source is opt-in.
 
 ## [0.1.27] - 2026-10-24
 
