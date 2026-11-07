@@ -249,6 +249,42 @@ test("idle poll finds a recording that fs.watch did not report", async () => {
   }
 });
 
+test("a removed recording folder leaves pending and the idle listing resumes", async () => {
+  const { module, cleanup } = await loadRecordingSource();
+  const rec = await makeRecordingsDir();
+  const delivered = [];
+  const logs = [];
+
+  try {
+    const source = module.createRecordingSource({
+      dir: rec.dir,
+      maxChars: () => 8000,
+      onText: (text) => delivered.push(text),
+      log: (_level, message) => logs.push(message),
+    });
+    source.start();
+
+    const folder = await rec.addEmptyRecording("1793612960");
+    source.consider("1793612960");
+    await rm(folder, { recursive: true, force: true });
+    // The vanished folder is dropped, so the source returns to the idle cadence.
+    source.poll();
+    assert.ok(
+      logs.some((message) => message.includes("give up on recording 1793612960 (folder gone)")),
+      `expected the vanished folder to be dropped, got ${JSON.stringify(logs)}`,
+    );
+
+    await rec.addRecording("1793612970", { result: "after a cancelled recording" });
+    source.poll();
+
+    assert.deepEqual(delivered, ["after a cancelled recording"]);
+    source.stop();
+  } finally {
+    await rec.cleanup();
+    await cleanup();
+  }
+});
+
 test("source waits for a late meta.json and then delivers once", async () => {
   const { module, cleanup } = await loadRecordingSource();
   const rec = await makeRecordingsDir();
@@ -292,7 +328,7 @@ test("source gives up on a recording whose result never arrives", async () => {
       onText: (text) => delivered.push(text),
       // A negative budget makes every recording stale on sight, so the give-up
       // branch runs without waiting out a real timeout.
-      freshMs: -1,
+      freshMs: -60_000,
       log: (level, message) => logs.push(`${level}:${message}`),
     });
     source.start();
@@ -327,7 +363,7 @@ test("source ignores a stale recording that still has text", async () => {
       onText: (text) => delivered.push(text),
       // Negative budget: a file that exists but is old must not be pasted, even
       // though it has text, because it is history rather than new speech.
-      freshMs: -1,
+      freshMs: -60_000,
     });
     source.start();
     // Above the high-water mark, so only the freshness check can reject it.

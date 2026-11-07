@@ -215,11 +215,13 @@ export function createRecordingSource(options: RecordingSourceOptions): Recordin
       // Not ready yet. A missing meta.json is normal for a folder fs.watch just
       // announced, so fall back to the folder's own mtime and only give up once
       // the recording itself has gone stale.
+      // An undefined age means the folder is gone (cancelled or cleaned up); keeping
+      // it pending would hold the hot cadence and stop the idle listing for good.
       const age = recordingAge(dir, id);
-      if (age !== undefined && age > freshMs) {
+      if (age === undefined || age > freshMs) {
         pending.delete(id);
         seen.add(id);
-        log("debug", `give up on recording ${id} (no result)`);
+        log("debug", `give up on recording ${id} (${age === undefined ? "folder gone" : "no result"})`);
       } else {
         pending.add(id);
       }

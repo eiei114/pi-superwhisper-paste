@@ -89,7 +89,7 @@ Docs: https://superwhisper.com/pi
 
 ## Quick start
 
-After install, start Pi and dictate with Superwhisper. New Superwhisper clipboard output should auto-paste into the active Pi editor when the bridge is on.
+After install, start Pi and dictate with Superwhisper. With the default `PI_SUPERWHISPER_PASTE_SOURCE=auto`, the bridge reads each new transcription from Superwhisper's recordings folder when it exists, and otherwise auto-pastes new Superwhisper clipboard output into the active Pi editor. Set `PI_SUPERWHISPER_PASTE_SOURCE=clipboard` to keep the clipboard workflow even when the recordings folder exists.
 
 Toggle the bridge at runtime:
 
