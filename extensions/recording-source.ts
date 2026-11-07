@@ -239,10 +239,34 @@ export function createRecordingSource(options: RecordingSourceOptions): Recordin
     deliver(read.text);
   }
 
+  /**
+   * Finds recording folders that fs.watch did not report.
+   *
+   * fs.watch can be unavailable, can fail later, or can drop events, so the
+   * idle poll also lists the folder. Only ids above the start-time high-water
+   * mark are considered, so history stays cheap to skip.
+   */
+  function scanForNew(): void {
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const id of entries) {
+      if (!running) return;
+      if (seen.has(id) || pending.has(id)) continue;
+      const n = Number(id);
+      if (Number.isFinite(n) && n > highWater) consider(id);
+    }
+  }
+
   function poll(): void {
     if (!running) return;
 
     for (const id of [...pending]) tryDeliver(id);
+    // The hot cadence only retries known folders; listing runs on the idle tick.
+    if (currentPollMs !== hotPollMs) scanForNew();
 
     // Nothing outstanding: fall back to the idle cadence and let fs.watch
     // wake us when the next recording appears.
@@ -276,9 +300,21 @@ export function createRecordingSource(options: RecordingSourceOptions): Recordin
     running = true;
 
     try {
-      watcher = watch(dir, { persistent: false }, (_event, filename) =>
+      const active = watch(dir, { persistent: false }, (_event, filename) =>
         consider(filename?.toString()),
       );
+      // An FSWatcher without an 'error' listener throws, which would take the
+      // whole Pi process down (for example when the folder is removed).
+      active.on("error", (error) => {
+        log("warn", `fs.watch failed, polling only: ${error}`);
+        try {
+          active.close();
+        } catch {
+          // Already closed.
+        }
+        if (watcher === active) watcher = undefined;
+      });
+      watcher = active;
     } catch (error) {
       // Polling alone still works, just slower to notice a new folder.
       log("warn", `fs.watch unavailable: ${error}`);

@@ -415,7 +415,8 @@ async function deliverRecordingText(
   const trimmed = text.trim();
   if (trimmed.length === 0) return;
   if (trimmed.length > maxChars()) return;
-  if (trimmed === state.lastPasted) return;
+  // No same-text guard here: the recording source already delivers each
+  // recording id once, and dictating the same words twice is a real repeat.
 
   if (!(await canReceiveRecording())) {
     state.lastPasteSummary = "skipped (not focused)";

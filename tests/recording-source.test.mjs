@@ -219,6 +219,36 @@ test("source delivers each recording exactly once", async () => {
   }
 });
 
+test("idle poll finds a recording that fs.watch did not report", async () => {
+  const { module, cleanup } = await loadRecordingSource();
+  const rec = await makeRecordingsDir();
+  const delivered = [];
+
+  try {
+    await rec.addRecording("1793612887", { result: "history" });
+    const source = module.createRecordingSource({
+      dir: rec.dir,
+      maxChars: () => 8000,
+      onText: (text) => delivered.push(text),
+    });
+    source.start();
+
+    await rec.addRecording("1793612950", { result: "watch missed this" });
+    // No consider(): only the idle poll's listing can find it.
+    source.poll();
+    assert.deepEqual(delivered, ["watch missed this"]);
+
+    // A late watch event or another poll must not deliver it again.
+    source.consider("1793612950");
+    source.poll();
+    assert.deepEqual(delivered, ["watch missed this"]);
+    source.stop();
+  } finally {
+    await rec.cleanup();
+    await cleanup();
+  }
+});
+
 test("source waits for a late meta.json and then delivers once", async () => {
   const { module, cleanup } = await loadRecordingSource();
   const rec = await makeRecordingsDir();
@@ -289,8 +319,7 @@ test("source ignores a stale recording that still has text", async () => {
   const delivered = [];
 
   try {
-    await rec.addRecording("1793612904", { result: "古い録音" });
-    await rec.addRecording("1793612905", { result: "history floor" });
+    await rec.addRecording("1793612903", { result: "history floor" });
 
     const source = module.createRecordingSource({
       dir: rec.dir,
@@ -301,6 +330,8 @@ test("source ignores a stale recording that still has text", async () => {
       freshMs: -1,
     });
     source.start();
+    // Above the high-water mark, so only the freshness check can reject it.
+    await rec.addRecording("1793612904", { result: "古い録音" });
     source.consider("1793612904");
 
     assert.deepEqual(delivered, []);

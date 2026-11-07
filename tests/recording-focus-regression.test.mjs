@@ -233,3 +233,60 @@ test("recording paste lands in the Herdr-focused pane", async () => {
     await rec.cleanup();
   }
 });
+
+test("dictating the same words twice pastes both recordings", async () => {
+  // Each recording id is delivered once by the source; a same-text guard on
+  // top of that dropped a genuine second "yes".
+  const originalExecFile = childProcess.execFile;
+  const originalGlobals = {
+    terminalId: process.env.HC_TERMINAL_ID,
+    recordings: process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR,
+    source: process.env.PI_SUPERWHISPER_PASTE_SOURCE,
+    mode: process.env.PI_SUPERWHISPER_PASTE,
+  };
+
+  const rec = await makeRecordings();
+  const loaded = [];
+
+  try {
+    process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR = rec.dir;
+    process.env.PI_SUPERWHISPER_PASTE_SOURCE = "recording";
+    process.env.PI_SUPERWHISPER_PASTE = "on";
+    process.env.HC_TERMINAL_ID = "t1n";
+
+    childProcess.execFile = stubExecFile("t1n");
+    syncBuiltinESMExports();
+
+    const { module, cleanup } = await loadExtensionModule({ prefix: "sw-focus-repeat" });
+    loaded.push(cleanup);
+
+    const harness = createPiHarness();
+    module.default(harness.pi);
+
+    const runtime = createRuntimeContext();
+    await harness.handler("session_start")({ reason: "startup" }, runtime.ctx);
+
+    const first = Date.now();
+    await rec.add(first, "yes");
+    assert.ok(await waitFor(() => runtime.pasted.length === 1), `first: ${JSON.stringify(runtime.pasted)}`);
+    await rec.add(first + 1000, "yes");
+    assert.ok(await waitFor(() => runtime.pasted.length === 2), `second: ${JSON.stringify(runtime.pasted)}`);
+    assert.deepEqual(runtime.pasted, ["yes", "yes"]);
+
+    await harness.handler("session_shutdown")();
+  } finally {
+    childProcess.execFile = originalExecFile;
+    syncBuiltinESMExports();
+    if (originalGlobals.terminalId === undefined) delete process.env.HC_TERMINAL_ID;
+    else process.env.HC_TERMINAL_ID = originalGlobals.terminalId;
+    if (originalGlobals.recordings === undefined) delete process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR;
+    else process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR = originalGlobals.recordings;
+    if (originalGlobals.source === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    else process.env.PI_SUPERWHISPER_PASTE_SOURCE = originalGlobals.source;
+    if (originalGlobals.mode === undefined) delete process.env.PI_SUPERWHISPER_PASTE;
+    else process.env.PI_SUPERWHISPER_PASTE = originalGlobals.mode;
+
+    for (const cleanup of loaded) await cleanup();
+    await rec.cleanup();
+  }
+});
