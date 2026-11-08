@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.2.1] - 2026-11-08
+
+### Changed
+
+- Pin the Pi SDK dev/test dependencies to `1.5.0` (`@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) and update the lockfile deliberately. Public peer ranges stay `*`.
+- Verify the extension against an actual Pi 1.5.0 host with the five-case behavioral smoke contract (`pi-sdk-behavior-v2`), including reload and the native Windows shell boundary.
+- Document the Pi SDK 1.5.0 migration findings for downstream work in `docs/pi-sdk-compatibility.md`.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added
