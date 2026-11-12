@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const EXTENSION_VERSION = "0.2.0";
 
 const STATUS_KEY = "superwhisper-paste";
-const DEFAULT_SOURCE = "auto";
+const DEFAULT_SOURCE = "clipboard";
 const DEFAULT_INTERVAL_MS = 800;
 const DEFAULT_MAX_CHARS = 8000;
 const DEFAULT_IGNORE_COPY_MS = 1500;
@@ -149,11 +149,16 @@ function defaultMode(): BridgeMode {
   return ["0", "false", "no", "off"].includes(raw) ? "off" : "on";
 }
 
-/** Resolves the transcription source from `PI_SUPERWHISPER_PASTE_SOURCE`. */
+/**
+ * Resolves the transcription source from `PI_SUPERWHISPER_PASTE_SOURCE`.
+ *
+ * An unset, blank or unrecognised value resolves to the clipboard default, so
+ * an empty setting can never opt a user into reading the recordings folder.
+ */
 function configuredSource(): BridgeSource {
-  const raw = (process.env.PI_SUPERWHISPER_PASTE_SOURCE ?? DEFAULT_SOURCE).trim().toLowerCase();
-  if (raw === "clipboard" || raw === "recording") return raw;
-  return "auto";
+  const raw = (process.env.PI_SUPERWHISPER_PASTE_SOURCE ?? "").trim().toLowerCase();
+  if (raw === "clipboard" || raw === "recording" || raw === "auto") return raw;
+  return DEFAULT_SOURCE;
 }
 
 /**

@@ -42,8 +42,10 @@ The `recording` source handles that case: Superwhisper writes every transcriptio
 `%LOCALAPPDATA%\com.superwhisper.app\recordings\<id>\meta.json` before it tries to paste, so
 reading the file needs neither the clipboard nor UI Automation.
 
-`PI_SUPERWHISPER_PASTE_SOURCE=auto` (the default) uses `recording` when that folder exists and
-falls back to `clipboard`. Force one with `clipboard` or `recording`. See `docs/examples.md`.
+The default `PI_SUPERWHISPER_PASTE_SOURCE=clipboard` keeps the original clipboard workflow.
+Opt into reading those files with `PI_SUPERWHISPER_PASTE_SOURCE=recording`; `auto` is also
+available to select recordings when the folder exists and otherwise fall back to clipboard.
+See `docs/examples.md`.
 
 ## Install
 
@@ -89,7 +91,7 @@ Docs: https://superwhisper.com/pi
 
 ## Quick start
 
-After install, start Pi and dictate with Superwhisper. With the default `PI_SUPERWHISPER_PASTE_SOURCE=auto`, the bridge reads each new transcription from Superwhisper's recordings folder when it exists, and otherwise auto-pastes new Superwhisper clipboard output into the active Pi editor. Set `PI_SUPERWHISPER_PASTE_SOURCE=clipboard` to keep the clipboard workflow even when the recordings folder exists.
+After install, start Pi and dictate with Superwhisper. By default, the bridge auto-pastes new Superwhisper clipboard output into the active Pi editor. Set `PI_SUPERWHISPER_PASTE_SOURCE=recording` to opt into reading transcriptions from Superwhisper's recordings folder, or set it to `auto` to select recordings when that folder exists and otherwise use the clipboard.
 
 Toggle the bridge at runtime:
 

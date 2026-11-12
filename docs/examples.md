@@ -26,7 +26,7 @@ Run these commands inside Pi's input box:
 | Variable | Default | Purpose |
 |---|---:|---|
 | `PI_SUPERWHISPER_PASTE` | `on` | Set to `off`, `0`, `false`, or `no` to disable by default. |
-| `PI_SUPERWHISPER_PASTE_SOURCE` | `auto` | Where transcriptions come from: `auto`, `clipboard`, or `recording`. `auto` uses `recording` when Superwhisper's recordings folder exists, else `clipboard`. |
+| `PI_SUPERWHISPER_PASTE_SOURCE` | `clipboard` | Where transcriptions come from: `clipboard`, `recording`, or `auto`. `recording` opts into the recordings folder; `auto` uses it when present, else `clipboard`. |
 | `PI_SUPERWHISPER_PASTE_RECORDINGS_DIR` | `%LOCALAPPDATA%\com.superwhisper.app\recordings` | Recordings folder read by the `recording` source. |
 | `PI_SUPERWHISPER_PASTE_INTERVAL_MS` | `800` | Clipboard polling interval. |
 | `PI_SUPERWHISPER_PASTE_MAX_CHARS` | `8000` | Maximum clipboard or recording text length to paste. |
@@ -38,7 +38,10 @@ Run these commands inside Pi's input box:
 ## Sources
 
 The bridge can read transcriptions two ways. `PI_SUPERWHISPER_PASTE_SOURCE` selects one;
-`auto` (the default) prefers `recording` and falls back to `clipboard`.
+`clipboard` is the default, while `recording` explicitly opts into reading the recordings folder.
+Set it to `auto` to retain automatic source selection (`recording` when the folder exists,
+otherwise `clipboard`). An unset, empty or unrecognised value resolves to `clipboard`, so a
+blank setting never enables the recordings folder by accident.
 
 **`clipboard`** — the original behaviour. Polls the Windows clipboard and pastes new text
 whose owner is not a terminal process.
@@ -62,7 +65,7 @@ is compared against `HC_TERMINAL_ID`, so a dictation does not land in every open
 1. Start Pi with this extension installed or loaded.
 2. Keep the Pi input box focused.
 3. Dictate with Superwhisper.
-4. Superwhisper writes the transcript to the clipboard (or to its recordings folder).
+4. Superwhisper writes the transcript to the clipboard (or, when the recording source is selected, to its recordings folder).
 5. The extension inserts the new text into the Pi editor.
 
 When multiple Pi tabs are open, only the tab that most recently had terminal focus or keyboard input should paste the new clipboard text.
