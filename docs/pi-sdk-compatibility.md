@@ -70,12 +70,34 @@ The harness asserts, against a real Pi process rather than a mocked import:
 4. `reload_cleanup` — a second, separate Pi process re-registers both commands,
    handles the feature command, and exits zero without unhandled or shutdown
    errors. Reload assertions read the second process only.
-5. `host_shell` — the native Windows PowerShell boundary launches the pinned
-   Pi CLI and prints exactly the pinned SDK version.
+5. `host_shell` — the native host shell boundary launches the pinned Pi CLI
+   with `--no-extensions --version` and must print exactly the pinned SDK
+   version (`1.5.0`) with exit code 0. The shell is platform-specific:
+   - Windows (`win32`): `System32\WindowsPowerShell\v1.0\powershell.exe`
+     (Windows PowerShell 5.1), run with `-NoProfile -NonInteractive`.
+   - Other platforms: `/bin/sh -c`, which is the branch exercised on Linux and
+     macOS.
 
 The harness resolves the CLI from the installed SDK manifest, checks all four
 installed versions against the exact pins, and uses an isolated temporary agent
 directory (`PI_CODING_AGENT_DIR`) so global Pi settings are untouched.
+
+### Platform coverage of `host_shell`
+
+The `host_shell` case picks its shell from `process.platform`, so which shell is
+actually verified depends on where the harness runs:
+
+- Required `CI` (`.github/workflows/ci.yml`) runs on `ubuntu-latest`, so routine
+  CI exercises only the `/bin/sh` boundary. It never launches PowerShell.
+- Windows PowerShell 5.1 is exercised only by a local Windows run.
+- The committed `docs/verification/pi-sdk-smoke.json` records `platform: win32`
+  and the `native_shell_boundary` observation from that PowerShell run
+  (`output: "1.5.0"`, `exit_code: 0`).
+
+Both platforms assert the same contract — the real CLI prints exactly the pinned
+version — but a green Ubuntu CI run is not evidence that the PowerShell boundary
+works, and vice versa. The same split applies to the rest of this document: the
+committed report is Windows evidence, while CI evidence is Linux evidence.
 
 ### Boundary of the claim
 
