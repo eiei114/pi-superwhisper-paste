@@ -180,7 +180,15 @@ test("recording paste lands only in the Herdr-focused pane", async () => {
   }
 });
 
-test("default source stays on clipboard when a recordings folder exists", async () => {
+/**
+ * Runs the extension with a recordings folder present and the given
+ * `PI_SUPERWHISPER_PASTE_SOURCE` value, then asserts the clipboard was chosen.
+ *
+ * Covers both an unset variable and an explicitly empty one: "empty" must not
+ * silently mean "auto", because auto would read the recordings folder and make
+ * recordings opt-out again.
+ */
+async function assertClipboardDefaultWithRecordingsFolder(prefix, sourceValue) {
   const originalExecFile = childProcess.execFile;
   const originalGlobals = {
     terminalId: process.env.HC_TERMINAL_ID,
@@ -197,7 +205,8 @@ test("default source stays on clipboard when a recordings folder exists", async 
 
   try {
     process.env.PI_SUPERWHISPER_PASTE_RECORDINGS_DIR = rec.dir;
-    delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    if (sourceValue === undefined) delete process.env.PI_SUPERWHISPER_PASTE_SOURCE;
+    else process.env.PI_SUPERWHISPER_PASTE_SOURCE = sourceValue;
     process.env.PI_SUPERWHISPER_PASTE = "on";
     process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = "20";
     delete process.env.HC_TERMINAL_ID;
@@ -213,7 +222,7 @@ test("default source stays on clipboard when a recordings folder exists", async 
     childProcess.execFile = mockExecFile;
     syncBuiltinESMExports();
 
-    const { module, cleanup } = await loadExtensionModule({ prefix: "sw-default-source" });
+    const { module, cleanup } = await loadExtensionModule({ prefix });
     loaded.push(cleanup);
 
     harness = createPiHarness();
@@ -224,7 +233,7 @@ test("default source stays on clipboard when a recordings folder exists", async 
 
     assert.ok(
       runtime.statuses.some(([, value]) => value?.includes("clipboard")),
-      `expected clipboard status, got ${JSON.stringify(runtime.statuses)}`,
+      `expected clipboard status for source ${JSON.stringify(sourceValue)}, got ${JSON.stringify(runtime.statuses)}`,
     );
 
     clipboard = "clipboard dictation";
@@ -248,6 +257,19 @@ test("default source stays on clipboard when a recordings folder exists", async 
     for (const cleanup of loaded) await cleanup();
     await rec.cleanup();
   }
+}
+
+test("default source stays on clipboard when a recordings folder exists", async () => {
+  await assertClipboardDefaultWithRecordingsFolder("sw-default-source", undefined);
+});
+
+test("an empty source setting still resolves to the clipboard", async () => {
+  // Whitespace-only counts too: trimming must not turn it into auto either.
+  await assertClipboardDefaultWithRecordingsFolder("sw-empty-source", "");
+});
+
+test("a whitespace-only source setting still resolves to the clipboard", async () => {
+  await assertClipboardDefaultWithRecordingsFolder("sw-blank-source", "   ");
 });
 
 test("recording paste lands in the Herdr-focused pane", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "pi-superwhisper-paste",
-  "version": "0.2.1",
+  "version": "0.2.0",
   "description": "Superwhisper bridge for Pi on Windows: clipboard and recording-file sources.",
   "type": "module",
   "license": "MIT",

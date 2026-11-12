@@ -16,12 +16,7 @@ This project follows semantic versioning.
 ### Changed
 
 - Status text now names the active source.
-
-## [0.2.1] - 2026-11-08
-
-### Fixed
-
-- Keep the original clipboard workflow as the default, even when a Superwhisper recordings folder exists; the recording-file source is opt-in.
+- The default source is the original clipboard workflow: even with a Superwhisper recordings folder present, `recording` stays opt-in.
 
 ## [0.1.27] - 2026-10-24
 

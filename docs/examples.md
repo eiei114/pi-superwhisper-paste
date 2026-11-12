@@ -40,7 +40,8 @@ Run these commands inside Pi's input box:
 The bridge can read transcriptions two ways. `PI_SUPERWHISPER_PASTE_SOURCE` selects one;
 `clipboard` is the default, while `recording` explicitly opts into reading the recordings folder.
 Set it to `auto` to retain automatic source selection (`recording` when the folder exists,
-otherwise `clipboard`).
+otherwise `clipboard`). An unset, empty or unrecognised value resolves to `clipboard`, so a
+blank setting never enables the recordings folder by accident.
 
 **`clipboard`** — the original behaviour. Polls the Windows clipboard and pastes new text
 whose owner is not a terminal process.
