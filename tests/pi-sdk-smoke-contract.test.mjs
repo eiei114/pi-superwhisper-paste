@@ -26,11 +26,12 @@ const notification = {
   message: "Superwhisper paste bridge: disabled",
 };
 const malformedRpc = { type: "response", command: "parse", success: false, error: "Invalid JSON" };
+const expectedSdkVersion = SDK_VERSIONS["@earendil-works/pi-coding-agent"];
 const observed = (responses = [commandList, prompt, notification], fullOutput = "", exit_code = 0) => ({
   responses,
   fullOutput,
   exit_code,
-  expectedSdkVersion: SDK_VERSIONS["@earendil-works/pi-coding-agent"],
+  expectedSdkVersion,
 });
 
 test("behavior contract and line-delimited JSON parsing", () => {
@@ -119,8 +120,8 @@ test("malformed RPC must return a handled parser error; omitted/positive respons
 });
 
 test("host shell must return exact installed Pi SDK version, not merely exit zero", () => {
-  assert.equal(behaviorAssertions("host_shell", observed([], "1.2.0\r\n"))[0].passed, true);
-  for (const [output, code] of [["", 0], ["1.2.0 extra", 0], ["1.1.0", 0], ["1.2.0", 1]]) {
+  assert.equal(behaviorAssertions("host_shell", observed([], `${expectedSdkVersion}\r\n`))[0].passed, true);
+  for (const [output, code] of [["", 0], [`${expectedSdkVersion} extra`, 0], ["1.4.0", 0], [expectedSdkVersion, 1]]) {
     assert.equal(behaviorAssertions("host_shell", observed([], output, code))[0].passed, false);
   }
 });

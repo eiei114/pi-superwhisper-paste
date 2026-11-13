@@ -8,7 +8,7 @@ import { createRecordingSource, recordingsDirAvailable } from "./recording-sourc
 import type { RecordingSource } from "./recording-source.ts";
 
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.2.0";
+const EXTENSION_VERSION = "0.2.1";
 
 const STATUS_KEY = "superwhisper-paste";
 const DEFAULT_SOURCE = "clipboard";
