@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [0.2.2] - 2026-11-17
+
+### Changed
+
+- Move the Pi SDK dev/test devDependency pins to `1.5.2` (`@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`). Public peer ranges stay `*`.
+- Read the expected Pi SDK version from `package.json` devDependencies in the smoke contract (`expectedSdkVersions()`) instead of hardcoding it, so a deliberate dependency bump no longer breaks `npm run smoke:pi` with a stale expected version.
+- Document the Pi SDK 1.5.2 pins in `docs/pi-sdk-compatibility.md`.
+
 ## [0.2.1] - 2026-11-08
 
 ### Changed

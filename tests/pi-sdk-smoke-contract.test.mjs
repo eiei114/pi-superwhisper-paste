@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   behaviorAssertions,
   combineReloadCleanup,
+  expectedSdkVersions,
   parseJsonLines,
-  SDK_VERSIONS,
+  SDK_NAMES,
   VERIFICATION_CONTRACT,
 } from "../scripts/pi-sdk-smoke-contract.mjs";
+
+const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const sdkPins = expectedSdkVersions(manifest);
 
 const commandList = {
   type: "response",
@@ -26,7 +31,7 @@ const notification = {
   message: "Superwhisper paste bridge: disabled",
 };
 const malformedRpc = { type: "response", command: "parse", success: false, error: "Invalid JSON" };
-const expectedSdkVersion = SDK_VERSIONS["@earendil-works/pi-coding-agent"];
+const expectedSdkVersion = sdkPins["@earendil-works/pi-coding-agent"];
 const observed = (responses = [commandList, prompt, notification], fullOutput = "", exit_code = 0) => ({
   responses,
   fullOutput,
@@ -37,6 +42,27 @@ const observed = (responses = [commandList, prompt, notification], fullOutput = 
 test("behavior contract and line-delimited JSON parsing", () => {
   assert.equal(VERIFICATION_CONTRACT, "pi-sdk-behavior-v2");
   assert.deepEqual(parseJsonLines(`not-json\r\n${JSON.stringify(prompt)}\n\n`), [prompt]);
+});
+
+test("SDK pins come from package.json devDependencies instead of a hardcoded version", () => {
+  assert.deepEqual(
+    sdkPins,
+    Object.fromEntries(SDK_NAMES.map((name) => [name, manifest.devDependencies[name]])),
+  );
+  assert.deepEqual(
+    expectedSdkVersions({ devDependencies: Object.fromEntries(SDK_NAMES.map((name) => [name, "9.9.9"])) }),
+    Object.fromEntries(SDK_NAMES.map((name) => [name, "9.9.9"])),
+    "a manifest pin change must move the expected SDK version without editing the contract script",
+  );
+  for (const pin of [undefined, "^1.5.2", "~1.5.2", "1.5.2-beta.1", "latest"]) {
+    assert.throws(
+      () => expectedSdkVersions({
+        devDependencies: { ...manifest.devDependencies, ["@earendil-works/pi-ai"]: pin },
+      }),
+      /must carry an exact dev\/test pin/,
+      `a non-exact or missing pin (${String(pin)}) must be rejected`,
+    );
+  }
 });
 
 test("actual extension registration must match both listed extension commands", () => {

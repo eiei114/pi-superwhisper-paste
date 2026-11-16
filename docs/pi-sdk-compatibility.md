@@ -1,15 +1,19 @@
-# Pi SDK 1.5.0 compatibility
+# Pi SDK 1.5.2 compatibility
 
 `pi-superwhisper-paste` is verified against the frozen Pi SDK wave:
 
-- `@earendil-works/pi-agent-core`: `1.5.0`
-- `@earendil-works/pi-ai`: `1.5.0`
-- `@earendil-works/pi-coding-agent`: `1.5.0`
-- `@earendil-works/pi-tui`: `1.5.0`
+- `@earendil-works/pi-agent-core`: `1.5.2`
+- `@earendil-works/pi-ai`: `1.5.2`
+- `@earendil-works/pi-coding-agent`: `1.5.2`
+- `@earendil-works/pi-tui`: `1.5.2`
 
 These are exact dev/test pins. Public peer dependency ranges stay `*`, so a
 host Pi of another version is not blocked by the published package; only the
-installed development host the smoke runs against is pinned.
+installed development host the smoke runs against is pinned. The expected
+version used by the smoke and its assertions is read from `package.json`
+`devDependencies` (`expectedSdkVersions()` in
+`scripts/pi-sdk-smoke-contract.mjs`), so bumping the pin does not require a
+second edit to the contract script.
 
 ## What this package uses from the SDK
 
@@ -23,10 +27,10 @@ extension API:
 - `ctx.hasUI` to skip clipboard polling when no editor is attached
 - the `input` handler returning `{ action: "continue" }` or `{ action: "handled" }`
 
-All of these behave the same on 1.5.0. The package registers no tools, so tool
+All of these behave the same on 1.5.2. The package registers no tools, so tool
 schema changes do not reach it (see the schema note below for completeness).
 
-## 1.5.0 notes that matter downstream
+## 1.5.x notes that matter downstream
 
 Reused from the verified `pi-extension-template` baseline (DOT-3243 / PR #141),
 adapted to what this package actually touches:
@@ -41,7 +45,7 @@ adapted to what this package actually touches:
   `Type`-free code only** — no TypeBox or `StringEnum` usage — so no cast is
   needed. A package that builds tool schemas must import `Type`/`Static` from
   `typebox` and wrap `StringEnum` as `Type.Unsafe<T>(StringEnum(...))`.
-- `pi-coding-agent` 1.5.0 pins `typebox` to exactly `1.3.27`. This package
+- `pi-coding-agent` 1.5.x pins `typebox` to exactly `1.3.27`. This package
   does not depend on `typebox` directly, so the lockfile keeps a single copy.
 - `before_agent_start` is a `messageType` union (`user` with `prompt`/`images`,
   `custom` with `message`) since 1.2.0. **This package does not handle
@@ -72,7 +76,8 @@ The harness asserts, against a real Pi process rather than a mocked import:
    errors. Reload assertions read the second process only.
 5. `host_shell` — the native host shell boundary launches the pinned Pi CLI
    with `--no-extensions --version` and must print exactly the pinned SDK
-   version (`1.5.0`) with exit code 0. The shell is platform-specific:
+   version (`1.5.2`, read from `package.json`) with exit code 0. The shell is
+   platform-specific:
    - Windows (`win32`): `System32\WindowsPowerShell\v1.0\powershell.exe`
      (Windows PowerShell 5.1), run with `-NoProfile -NonInteractive`.
    - Other platforms: `/bin/sh -c`, which is the branch exercised on Linux and
@@ -92,7 +97,7 @@ actually verified depends on where the harness runs:
 - Windows PowerShell 5.1 is exercised only by a local Windows run.
 - The committed `docs/verification/pi-sdk-smoke.json` records `platform: win32`
   and the `native_shell_boundary` observation from that PowerShell run
-  (`output: "1.5.0"`, `exit_code: 0`).
+  (`output: "1.5.2"`, `exit_code: 0`).
 
 Both platforms assert the same contract — the real CLI prints exactly the pinned
 version — but a green Ubuntu CI run is not evidence that the PowerShell boundary

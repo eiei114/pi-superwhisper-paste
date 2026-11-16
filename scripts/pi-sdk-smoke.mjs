@@ -5,10 +5,10 @@ import { dirname, resolve } from "node:path";
 import {
   behaviorAssertions,
   combineReloadCleanup,
+  expectedSdkVersions,
   EXTENSION_LOAD_ERROR_PATTERN,
   parseJsonLines,
   SDK_NAMES,
-  SDK_VERSIONS,
   UNHANDLED_ERROR_PATTERN,
   VERIFICATION_CONTRACT,
 } from "./pi-sdk-smoke-contract.mjs";
@@ -21,12 +21,13 @@ const reportPath = process.argv.includes("--update-curated-report")
   : resolve(root, ".tmp/pi-sdk-smoke.json");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const manifest = readJson(resolve(root, "package.json"));
+const expectedVersions = expectedSdkVersions(manifest);
 const sdkVersions = Object.fromEntries(SDK_NAMES.map((name) =>
   [name, readJson(resolve(root, "node_modules", name, "package.json")).version]));
 
 for (const name of SDK_NAMES) {
-  if (manifest.devDependencies?.[name] !== SDK_VERSIONS[name] || sdkVersions[name] !== SDK_VERSIONS[name]) {
-    throw new Error(`Smoke requires exact Pi SDK ${SDK_VERSIONS[name]} dev/test pin for ${name}; found ${sdkVersions[name]}`);
+  if (sdkVersions[name] !== expectedVersions[name]) {
+    throw new Error(`Smoke requires the exact Pi SDK ${expectedVersions[name]} dev/test pin declared in package.json for ${name}; found ${sdkVersions[name]}`);
   }
 }
 
@@ -65,7 +66,7 @@ function run(name, executable, args, input) {
     responses,
     fullOutput,
     exit_code,
-    expectedSdkVersion: SDK_VERSIONS["@earendil-works/pi-coding-agent"],
+    expectedSdkVersion: expectedVersions["@earendil-works/pi-coding-agent"],
   });
   const hasUnhandledError = UNHANDLED_ERROR_PATTERN.test(fullOutput);
   const hasLoadError = EXTENSION_LOAD_ERROR_PATTERN.test(fullOutput);
