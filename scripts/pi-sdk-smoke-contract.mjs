@@ -1,11 +1,29 @@
 export const VERIFICATION_CONTRACT = "pi-sdk-behavior-v2";
-export const SDK_VERSIONS = Object.freeze({
-  "@earendil-works/pi-agent-core": "1.5.0",
-  "@earendil-works/pi-ai": "1.5.0",
-  "@earendil-works/pi-coding-agent": "1.5.0",
-  "@earendil-works/pi-tui": "1.5.0",
-});
-export const SDK_NAMES = Object.keys(SDK_VERSIONS);
+export const SDK_NAMES = Object.freeze([
+  "@earendil-works/pi-agent-core",
+  "@earendil-works/pi-ai",
+  "@earendil-works/pi-coding-agent",
+  "@earendil-works/pi-tui",
+]);
+
+// The SDK pins live in package.json devDependencies. Reading them here keeps a
+// deliberate dependency bump (Dependabot or manual) a manifest-and-lockfile
+// change instead of a script edit that silently keeps asserting the old wave.
+const EXACT_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
+export function expectedSdkVersions(manifest) {
+  const pins = {};
+  for (const name of SDK_NAMES) {
+    const pin = manifest?.devDependencies?.[name];
+    if (typeof pin !== "string" || !EXACT_VERSION_PATTERN.test(pin)) {
+      throw new Error(
+        `${name} must carry an exact dev/test pin in package.json devDependencies; found ${pin ?? "nothing"}`,
+      );
+    }
+    pins[name] = pin;
+  }
+  return pins;
+}
 export const UNHANDLED_ERROR_PATTERN = /UnhandledPromiseRejection|uncaught exception|shutdown error/i;
 export const EXTENSION_LOAD_ERROR_PATTERN = /Failed to load extension|Error loading extension/i;
 
