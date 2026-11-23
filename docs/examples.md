@@ -28,7 +28,7 @@ Run these commands inside Pi's input box:
 | `PI_SUPERWHISPER_PASTE` | `on` | Set to `off`, `0`, `false`, or `no` to disable by default. |
 | `PI_SUPERWHISPER_PASTE_SOURCE` | `clipboard` | Where transcriptions come from: `clipboard`, `recording`, or `auto`. `recording` opts into the recordings folder; `auto` uses it when present, else `clipboard`. |
 | `PI_SUPERWHISPER_PASTE_RECORDINGS_DIR` | `%LOCALAPPDATA%\com.superwhisper.app\recordings` | Recordings folder read by the `recording` source. |
-| `PI_SUPERWHISPER_PASTE_INTERVAL_MS` | `800` | Clipboard polling interval. |
+| `PI_SUPERWHISPER_PASTE_INTERVAL_MS` | `800` | Clipboard polling interval in milliseconds. Values outside Node's timer range (1 to 2,147,483,647 ms, inclusive) or invalid values fall back to 800 ms. |
 | `PI_SUPERWHISPER_PASTE_MAX_CHARS` | `8000` | Maximum clipboard or recording text length to paste. |
 | `PI_SUPERWHISPER_PASTE_IGNORE_COPY_MS` | `1500` | Ignore clipboard changes briefly after local terminal copy shortcuts. |
 | `PI_SUPERWHISPER_PASTE_OWNER_DENYLIST` | `windowsterminal, windows terminal, openconsole, wezterm, alacritty, mintty, conhost, cmd.exe, code, powershell, pwsh, bash, cursor, wsl (and .exe variants)` | Comma-separated clipboard owner process/path substrings blocked from auto-paste. |

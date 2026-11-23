@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- Fall back to the default 800 ms clipboard polling interval when the configured delay is outside Node's timer range, instead of polling every 1 ms.
+
 ## [0.2.2] - 2026-11-17
 
 ### Changed

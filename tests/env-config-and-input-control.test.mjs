@@ -265,6 +265,22 @@ test("numeric env values fall back on non-numeric/zero/negative, but IGNORE_COPY
   assert.equal(ext.DEFAULT_IGNORE_COPY_MS, 1500);
 });
 
+test("polling interval falls back outside Node's timer range", (t) => {
+  t.after(snapshotEnv());
+
+  for (const [raw, expected] of [
+    ["250", 250],
+    ["2147483647", 2_147_483_647],
+    ["2147483648", 800],
+    ["1", 1],
+    ["0.5", 800],
+  ]) {
+    ext.__resetCaches();
+    process.env.PI_SUPERWHISPER_PASTE_INTERVAL_MS = raw;
+    assert.equal(ext.intervalMs(), expected, `interval=${raw}`);
+  }
+});
+
 test("OWNER_DENYLIST is split/trimmed/lowercased and an all-empty list uses the default", (t) => {
   const restoreEnv = snapshotEnv();
   t.after(restoreEnv);
