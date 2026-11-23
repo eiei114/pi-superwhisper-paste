@@ -13,6 +13,7 @@ const EXTENSION_VERSION = "0.2.2";
 const STATUS_KEY = "superwhisper-paste";
 const DEFAULT_SOURCE = "clipboard";
 const DEFAULT_INTERVAL_MS = 800;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const DEFAULT_MAX_CHARS = 8000;
 const DEFAULT_IGNORE_COPY_MS = 1500;
 const BASELINE_REFRESH_DELAY_MS = 120;
@@ -184,7 +185,9 @@ function runtimeConfig(): RuntimeConfig {
 
   cachedRuntimeConfig = {
     intervalMs:
-      Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : DEFAULT_INTERVAL_MS,
+      parsedInterval >= 1 && parsedInterval <= MAX_TIMER_DELAY_MS
+        ? parsedInterval
+        : DEFAULT_INTERVAL_MS,
     maxChars:
       Number.isFinite(parsedMaxChars) && parsedMaxChars > 0 ? parsedMaxChars : DEFAULT_MAX_CHARS,
     ignoreCopyMs:
