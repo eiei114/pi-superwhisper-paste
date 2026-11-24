@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { stripTypeScriptTypes } from "node:module";
 import { tmpdir } from "node:os";
@@ -310,6 +311,48 @@ test("source waits for a late meta.json and then delivers once", async () => {
     assert.deepEqual(delivered, ["遅れて届いた"]);
     source.stop();
   } finally {
+    await rec.cleanup();
+    await cleanup();
+  }
+});
+
+test("source keeps unsupported metadata pending and delivers once after it becomes valid", async () => {
+  const { module, cleanup } = await loadRecordingSource();
+  const rec = await makeRecordingsDir();
+  const delivered = [];
+  const id = "1793612903";
+  const source = module.createRecordingSource({
+    dir: rec.dir,
+    maxChars: () => 8000,
+    onText: (text) => delivered.push(text),
+  });
+
+  try {
+    source.start();
+    // Keep the writes and polls in the same turn so recovery cannot depend on fs.watch.
+    const folder = join(rec.dir, id);
+    mkdirSync(folder);
+    const metaPath = join(folder, "meta.json");
+    writeFileSync(metaPath, "null", "utf8");
+    source.consider(id);
+    source.poll();
+    assert.deepEqual(delivered, []);
+
+    for (const meta of ["transcript", 42, true, [{ result: "not metadata" }]]) {
+      writeFileSync(metaPath, JSON.stringify(meta), "utf8");
+      source.poll();
+      assert.deepEqual(delivered, []);
+    }
+
+    writeFileSync(metaPath, JSON.stringify({ result: "  ready  " }), "utf8");
+    source.poll();
+    assert.deepEqual(delivered, ["ready"]);
+
+    source.consider(id);
+    source.poll();
+    assert.deepEqual(delivered, ["ready"]);
+  } finally {
+    source.stop();
     await rec.cleanup();
     await cleanup();
   }

@@ -86,7 +86,7 @@ export function highWaterMark(dir: string): number {
  * Reads the transcription out of one recording's meta.json.
  *
  * A half-written file is normal: Superwhisper writes it in place, so a parse
- * failure means "not ready yet", not "no speech".
+ * failure or unsupported JSON shape means "not ready yet", not "no speech".
  */
 export function readRecordingResult(
   dir: string,
@@ -102,13 +102,18 @@ export function readRecordingResult(
     return { pending: true };
   }
 
-  let meta: RecordingMeta;
+  let parsed: unknown;
   try {
-    meta = JSON.parse(raw) as RecordingMeta;
+    parsed = JSON.parse(raw);
   } catch {
     return { pending: true };
   }
 
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { pending: true };
+  }
+
+  const meta: RecordingMeta = parsed;
   const result = typeof meta.result === "string" ? meta.result.trim() : "";
   if (result.length === 0) return { pending: true };
   if (result.length > maxChars) return { text: result.slice(0, maxChars) };
