@@ -25,7 +25,7 @@
  * thousands of past recordings on disk.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync, watch } from "node:fs";
+import { readFileSync, readdirSync, statSync, watch, type Dirent } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -59,24 +59,23 @@ export function recordingsDirAvailable(dir: string): boolean {
 }
 
 /**
- * Highest numeric recording id in `dir`, or 0 when empty.
+ * Highest numeric directory id in `dir`, or 0 when none exists.
  *
  * Ids are millisecond timestamps and increase monotonically, so this is the
  * boundary between "already existed when we started" and "new speech".
  */
 export function highWaterMark(dir: string): number {
-  if (!existsSync(dir)) return 0;
-
   let max = 0;
-  let entries: string[];
+  let entries: Dirent[];
   try {
-    entries = readdirSync(dir);
+    entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return 0;
   }
 
-  for (const id of entries) {
-    const n = Number(id);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const n = Number(entry.name);
     if (Number.isFinite(n) && n > max) max = n;
   }
   return max;
