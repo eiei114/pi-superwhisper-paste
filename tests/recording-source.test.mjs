@@ -258,6 +258,40 @@ test("idle poll finds a recording that fs.watch did not report", async () => {
   }
 });
 
+test("a numeric file present at startup does not block polling for new recordings", async () => {
+  const { module, cleanup } = await loadRecordingSource();
+  const rec = await makeRecordingsDir();
+  const delivered = [];
+  const source = module.createRecordingSource({
+    dir: rec.dir,
+    maxChars: () => 8000,
+    onText: (text) => delivered.push(text),
+  });
+
+  try {
+    await rec.addRecording("100", { result: "history" });
+    await writeFile(join(rec.dir, "200"), "stray file", "utf8");
+
+    // Keep startup, writes and polls in the same turn: no watch callback can run.
+    source.start();
+    source.poll();
+    assert.deepEqual(delivered, []);
+
+    const folder = join(rec.dir, "300");
+    mkdirSync(folder);
+    writeFileSync(join(folder, "meta.json"), JSON.stringify({ result: "new speech" }), "utf8");
+    source.poll();
+    assert.deepEqual(delivered, ["new speech"]);
+
+    source.poll();
+    assert.deepEqual(delivered, ["new speech"]);
+  } finally {
+    source.stop();
+    await rec.cleanup();
+    await cleanup();
+  }
+});
+
 test("a removed recording folder leaves pending and the idle listing resumes", async () => {
   const { module, cleanup } = await loadRecordingSource();
   const rec = await makeRecordingsDir();

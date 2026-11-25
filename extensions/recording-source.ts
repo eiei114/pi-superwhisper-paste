@@ -253,14 +253,16 @@ export function createRecordingSource(options: RecordingSourceOptions): Recordin
    * mark are considered, so history stays cheap to skip.
    */
   function scanForNew(): void {
-    let entries: string[];
+    let entries: Dirent[];
     try {
-      entries = readdirSync(dir);
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return;
     }
-    for (const id of entries) {
+    for (const entry of entries) {
       if (!running) return;
+      if (!entry.isDirectory()) continue;
+      const id = entry.name;
       if (seen.has(id) || pending.has(id)) continue;
       const n = Number(id);
       if (Number.isFinite(n) && n > highWater) consider(id);
