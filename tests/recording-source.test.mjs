@@ -57,12 +57,13 @@ test("highWaterMark is 0 for a missing folder", async () => {
   }
 });
 
-test("highWaterMark ignores non-numeric folder names", async () => {
+test("highWaterMark counts only numeric directories", async () => {
   const { module, cleanup } = await loadRecordingSource();
   const rec = await makeRecordingsDir();
   try {
     await rec.addRecording("1793612887", { result: "a" });
     await rec.addRecording("tmp-not-a-timestamp", { result: "b" });
+    await writeFile(join(rec.dir, "1793613000"), "stray file", "utf8");
     assert.equal(module.highWaterMark(rec.dir), 1793612887);
   } finally {
     await rec.cleanup();
@@ -140,29 +141,36 @@ test("readRecordingResult truncates to maxChars", async () => {
   }
 });
 
-test("source delivers a recording newer than the high-water mark", async () => {
+test("source delivers a new recording once even below a stray numeric file's ID", async () => {
   const { module, cleanup } = await loadRecordingSource();
   const rec = await makeRecordingsDir();
   const delivered = [];
+  const source = module.createRecordingSource({
+    dir: rec.dir,
+    maxChars: () => 8000,
+    onText: (text) => delivered.push(text),
+  });
 
   try {
     await rec.addRecording("1793612887", { result: "history" });
-
-    const source = module.createRecordingSource({
-      dir: rec.dir,
-      maxChars: () => 8000,
-      onText: (text) => delivered.push(text),
-    });
+    await writeFile(join(rec.dir, "1793613000"), "stray file", "utf8");
 
     source.start();
     assert.equal(source.isRunning(), true);
 
-    await rec.addRecording("1793612900", { result: "新しい音声" });
+    source.consider("1793612887");
+    assert.deepEqual(delivered, []);
+
+    // Use the watch seam directly, without waiting for a real watch event.
+    const folder = join(rec.dir, "1793612900");
+    mkdirSync(folder);
+    writeFileSync(join(folder, "meta.json"), JSON.stringify({ result: "新しい音声" }), "utf8");
+    source.consider("1793612900");
     source.consider("1793612900");
 
     assert.deepEqual(delivered, ["新しい音声"]);
-    source.stop();
   } finally {
+    source.stop();
     await rec.cleanup();
     await cleanup();
   }
@@ -245,6 +253,40 @@ test("idle poll finds a recording that fs.watch did not report", async () => {
     assert.deepEqual(delivered, ["watch missed this"]);
     source.stop();
   } finally {
+    await rec.cleanup();
+    await cleanup();
+  }
+});
+
+test("a numeric file present at startup does not block polling for new recordings", async () => {
+  const { module, cleanup } = await loadRecordingSource();
+  const rec = await makeRecordingsDir();
+  const delivered = [];
+  const source = module.createRecordingSource({
+    dir: rec.dir,
+    maxChars: () => 8000,
+    onText: (text) => delivered.push(text),
+  });
+
+  try {
+    await rec.addRecording("100", { result: "history" });
+    await writeFile(join(rec.dir, "200"), "stray file", "utf8");
+
+    // Keep startup, writes and polls in the same turn: no watch callback can run.
+    source.start();
+    source.poll();
+    assert.deepEqual(delivered, []);
+
+    const folder = join(rec.dir, "300");
+    mkdirSync(folder);
+    writeFileSync(join(folder, "meta.json"), JSON.stringify({ result: "new speech" }), "utf8");
+    source.poll();
+    assert.deepEqual(delivered, ["new speech"]);
+
+    source.poll();
+    assert.deepEqual(delivered, ["new speech"]);
+  } finally {
+    source.stop();
     await rec.cleanup();
     await cleanup();
   }
